@@ -66,12 +66,20 @@ def run_analysis(self, analysis_id: str) -> None:
             r.token_expires_at = datetime.utcnow() + timedelta(hours=1)
         _short_txn(analysis_id, _mark_completed)
     except Exception as exc:
+        from app.analysis.repo_loader import RepoCloneError
+
         tb = traceback.format_exc()
+        is_user_facing = isinstance(exc, RepoCloneError)
+        clean_msg = str(exc) if is_user_facing else f"{exc}\n{tb}"
 
         def _mark_failed(r: Analysis) -> None:
             r.status = "failed"
-            r.error = f"{exc}\n{tb}"
+            r.error = clean_msg
         _short_txn(analysis_id, _mark_failed)
+        if is_user_facing:
+            # Don't raise — user-facing errors are not retryable and shouldn't
+            # pollute worker logs with stack traces.
+            return
         raise
 
 

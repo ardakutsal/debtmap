@@ -54,7 +54,7 @@ export default function LandingPage() {
           </span>
         </div>
         <nav className="flex items-center gap-6 text-sm text-muted">
-          <a href="https://github.com" className="hover:text-text">GitHub</a>
+          <a href="https://github.com/ardakutsal/debtmap" className="hover:text-text">GitHub</a>
           <a href="#how" className="hover:text-text">How it works</a>
           <a href="#badge" className="hover:text-text">Badge</a>
         </nav>
@@ -104,7 +104,7 @@ export default function LandingPage() {
             alt="debtmap B · 34"
             src="data:image/svg+xml;utf8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22130%22 height=%2220%22%3E%3Crect width=%2260%22 height=%2220%22 fill=%22%2324292f%22/%3E%3Crect x=%2260%22 width=%2270%22 height=%2220%22 fill=%22%237ec93f%22/%3E%3Ctext x=%2230%22 y=%2214%22 fill=%22%23fff%22 font-family=%22Verdana%22 font-size=%2211%22 text-anchor=%22middle%22%3Edebtmap%3C/text%3E%3Ctext x=%2295%22 y=%2214%22 fill=%22%23fff%22 font-family=%22Verdana%22 font-size=%2211%22 text-anchor=%22middle%22%3EB · 34%3C/text%3E%3C/svg%3E"
           />
-          <span>`![debtmap](https://debtmap.dev/badge/owner/repo.svg)`</span>
+          <span>paste the markdown snippet from your results page into your README</span>
         </div>
       </section>
 

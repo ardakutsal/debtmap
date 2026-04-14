@@ -1,12 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-export function BadgeSnippet({ owner, repo, apiBase }: { owner: string; repo: string; apiBase: string }) {
+export function BadgeSnippet({
+  owner,
+  repo,
+  apiBase,
+  analysisId,
+}: {
+  owner: string;
+  repo: string;
+  apiBase: string;
+  analysisId: string;
+}) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [origin, setOrigin] = useState<string>('');
+  useEffect(() => {
+    if (typeof window !== 'undefined') setOrigin(window.location.origin);
+  }, []);
+
   const url = `${apiBase}/badge/${owner}/${repo}`;
-  const md = `[![debtmap](${url})](https://debtmap.dev/results/${owner}/${repo})`;
-  const html = `<a href="https://debtmap.dev/results/${owner}/${repo}"><img src="${url}" alt="debtmap"/></a>`;
+  const resultsLink = origin ? `${origin}/results/${analysisId}` : '';
+  const md = resultsLink
+    ? `[![debtmap](${url})](${resultsLink})`
+    : `![debtmap](${url})`;
+  const html = resultsLink
+    ? `<a href="${resultsLink}"><img src="${url}" alt="debtmap"/></a>`
+    : `<img src="${url}" alt="debtmap"/>`;
 
   function copy(label: string, text: string) {
     navigator.clipboard?.writeText(text);

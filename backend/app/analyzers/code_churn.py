@@ -45,7 +45,7 @@ class CodeChurnAnalyzer:
 
         url = f"https://api.github.com/repos/{owner}/{repo}/commits"
 
-        with httpx.Client(timeout=15.0) as client:
+        with httpx.Client(timeout=15.0, follow_redirects=True) as client:
             commits, status = _list_commits(client, url, branch, headers)
             if status != "ok":
                 return _skipped(status)
@@ -137,6 +137,10 @@ def _list_commits(client: httpx.Client, url: str, branch: str, headers: dict) ->
         data = resp.json()
         if not data:
             break
+        # Guard: if GitHub returned an unexpected shape (e.g. a dict error body
+        # slipped past the status check), skip rather than crash downstream.
+        if not isinstance(data, list):
+            return commits, f"github unexpected response shape"
         commits.extend(data)
         if len(data) < 100:
             break

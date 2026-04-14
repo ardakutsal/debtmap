@@ -97,7 +97,7 @@ export default function ResultsPage() {
             </dl>
           </Panel>
           <Panel title="Embed badge">
-            <BadgeSnippet owner={data.owner} repo={data.repo} apiBase={API_BASE} />
+            <BadgeSnippet owner={data.owner} repo={data.repo} apiBase={API_BASE} analysisId={id ?? ''} />
           </Panel>
         </aside>
       </div>

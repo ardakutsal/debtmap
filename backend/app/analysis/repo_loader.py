@@ -32,6 +32,10 @@ def parse_repo_url(url: str) -> tuple[str, str]:
     return parts[0], parts[1]
 
 
+class RepoCloneError(Exception):
+    """Clone failed for a reason worth showing to the user."""
+
+
 def clone_repo(url: str, branch: str, token: str | None, dest: str) -> str:
     """Clone the repo at the given branch. If that branch does not exist,
     fall back to the remote's default branch. Returns the branch actually used."""
@@ -52,9 +56,26 @@ def clone_repo(url: str, branch: str, token: str | None, dest: str) -> str:
         if "remote branch" in msg and "not found" in msg:
             import shutil as _shutil
             _shutil.rmtree(dest, ignore_errors=True)
-            repo = Repo.clone_from(clone_url, dest, depth=50, multi_options=["--no-tags"])
-            return repo.active_branch.name
-        raise
+            try:
+                repo = Repo.clone_from(clone_url, dest, depth=50, multi_options=["--no-tags"])
+                return repo.active_branch.name
+            except GitCommandError as exc2:
+                raise _friendly_clone_error(exc2) from exc2
+        raise _friendly_clone_error(exc) from exc
+
+
+def _friendly_clone_error(exc) -> RepoCloneError:
+    msg = str(exc).lower()
+    if "could not read username" in msg or "authentication failed" in msg or "authorization" in msg:
+        return RepoCloneError(
+            "Repository not found or not publicly accessible. "
+            "If this is a private repo, provide a GitHub token when submitting."
+        )
+    if "not found" in msg or "does not exist" in msg or "repository not found" in msg:
+        return RepoCloneError("Repository not found.")
+    if "timed out" in msg or "timeout" in msg:
+        return RepoCloneError("Clone timed out — repository may be too large or network unavailable.")
+    return RepoCloneError(f"Clone failed: {str(exc).splitlines()[0][:200]}")
 
 
 def load_files_from_dir(root: str) -> LoadedRepo:

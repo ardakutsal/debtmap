@@ -1,11 +1,7 @@
-version: "3.9"
-
 services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
 
   api:
     build:
@@ -14,7 +10,7 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: sqlite:////data/debtmap.db
-      FERNET_KEY: ${FERNET_KEY:-<FERNET-KEY-ROTATED-AND-REMOVED>=}
+      FERNET_KEY: ${FERNET_KEY}
       CORS_ORIGINS_CSV: http://localhost:3000
     volumes:
       - debtmap_data:/data
@@ -31,7 +27,22 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: sqlite:////data/debtmap.db
-      FERNET_KEY: ${FERNET_KEY:-<FERNET-KEY-ROTATED-AND-REMOVED>=}
+      FERNET_KEY: ${FERNET_KEY}
+    volumes:
+      - debtmap_data:/data
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: .
+      dockerfile: docker/worker.Dockerfile
+    command: celery -A app.services.celery_app.celery_app beat --loglevel=info
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: sqlite:////data/debtmap.db
+      FERNET_KEY: ${FERNET_KEY}
     volumes:
       - debtmap_data:/data
     depends_on:
@@ -42,8 +53,8 @@ services:
     build:
       context: .
       dockerfile: docker/frontend.Dockerfile
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3000:3000"
     depends_on:

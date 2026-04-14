@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:6379/0"
     database_url: str = "sqlite:///./debtmap.db"
-    fernet_key: str = "<FERNET-KEY-ROTATED-AND-REMOVED>="
+    fernet_key: str = ""
     github_token: str = ""
     max_files_per_repo: int = 500
     max_file_bytes: int = 500_000

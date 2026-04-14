@@ -6,7 +6,13 @@ from app.config import get_settings
 
 
 def _cipher() -> Fernet:
-    return Fernet(get_settings().fernet_key.encode("utf-8"))
+    key = get_settings().fernet_key
+    if not key:
+        raise RuntimeError(
+            "FERNET_KEY is not set. Generate one: "
+            "python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+        )
+    return Fernet(key.encode("utf-8"))
 
 
 def encrypt(token: str) -> str:

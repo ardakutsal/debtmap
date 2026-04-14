@@ -61,7 +61,8 @@ def health():
     except Exception:
         db_ok = False
 
-    return {"status": "ok" if db_ok else "degraded", "version": app.version, "redis": redis_ok, "db": db_ok}
+    status = "ok" if (db_ok and redis_ok) else "degraded"
+    return {"status": status, "version": app.version, "redis": redis_ok, "db": db_ok}
 
 
 @app.post("/analyze", response_model=AnalyzeResponse, status_code=202)

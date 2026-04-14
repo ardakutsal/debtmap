@@ -20,4 +20,10 @@ celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     task_time_limit=60 * 5,
+    beat_schedule={
+        "purge-tokens": {
+            "task": "debtmap.purge_tokens",
+            "schedule": 3600.0,
+        },
+    },
 )

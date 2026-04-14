@@ -1,0 +1,38 @@
+[tool.poetry]
+name = "debtmap"
+version = "0.1.0"
+description = "Technical debt scanner for AI-generated codebases"
+authors = ["DebtMap Contributors"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "app" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.110.0"
+uvicorn = { extras = ["standard"], version = "^0.27.0" }
+pydantic = "^2.6.0"
+pydantic-settings = "^2.1.0"
+sqlalchemy = "^2.0.25"
+celery = { extras = ["redis"], version = "^5.3.6" }
+redis = "^5.0.1"
+httpx = "^0.26.0"
+networkx = "^3.2.1"
+datasketch = "^1.6.4"
+cryptography = "^42.0.0"
+slowapi = "^0.1.9"
+python-multipart = "^0.0.9"
+gitpython = "^3.1.40"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-asyncio = "^0.23.0"
+pytest-cov = "^4.1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

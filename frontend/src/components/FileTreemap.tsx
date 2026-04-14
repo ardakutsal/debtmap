@@ -46,18 +46,21 @@ function groupSmall(files: FileSummary[]): FileSummary[] {
 }
 
 function Cell(props: any) {
-  const { x, y, width, height, score, name } = props;
+  const { x, y, width, height, score, name, depth, root } = props;
   if (width < 2 || height < 2) return null;
+  // Recharts Treemap renders a root wrapper (depth 0) without per-tile data.
+  // Skip it so we don't paint a full-canvas overlay or read undefined fields.
+  if (depth === 0 || root === undefined && name === undefined) return null;
   const color = gradeColor(Number(score ?? 0));
   return (
     <g>
       <rect x={x} y={y} width={width} height={height} fill={color} fillOpacity={0.75} stroke="#0f1117" />
-      {width > 70 && height > 22 && (
+      {width > 70 && height > 22 && typeof name === 'string' && (
         <text x={x + 6} y={y + 16} fontSize={11} fill="#0f1117" className="mono" style={{ fontWeight: 600 }}>
           {truncate(name, Math.floor(width / 7))}
         </text>
       )}
-      {width > 70 && height > 38 && (
+      {width > 70 && height > 38 && score != null && (
         <text x={x + 6} y={y + 30} fontSize={10} fill="#0f1117" opacity={0.8} className="mono">
           {Number(score).toFixed(0)}
         </text>
@@ -66,6 +69,7 @@ function Cell(props: any) {
   );
 }
 
-function truncate(s: string, n: number) {
+function truncate(s: string | undefined, n: number) {
+  if (!s) return '';
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }

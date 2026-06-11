@@ -31,7 +31,10 @@ export function CategoryPie({ analyzers }: { analyzers: Record<string, { score: 
   return (
     <div className="flex flex-col items-center">
       <PieChart width={CHART_W} height={CHART_H}>
-        <Pie data={data} dataKey="value" nameKey="name" innerRadius={46} outerRadius={88} paddingAngle={2}>
+        {/* isAnimationActive=false: the mount animation freezes at frame 0 in
+            production builds, leaving sliver-thin sectors — render final
+            geometry directly. */}
+        <Pie data={data} dataKey="value" nameKey="name" innerRadius={46} outerRadius={88} paddingAngle={2} isAnimationActive={false}>
           {data.map((_, i) => (
             <Cell key={i} fill={PALETTE[i % PALETTE.length]} stroke="#0f1117" />
           ))}

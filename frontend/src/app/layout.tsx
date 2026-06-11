@@ -1,9 +1,14 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
+const TITLE = 'DebtMap — Find technical debt in AI-generated codebases';
+const DESCRIPTION = 'A one-number score, treemap, and action plan for any GitHub repository.';
+
 export const metadata: Metadata = {
-  title: 'DebtMap — Find technical debt in AI-generated codebases',
-  description: 'A one-number score, treemap, and action plan for any GitHub repository.',
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: { title: TITLE, description: DESCRIPTION, siteName: 'DebtMap', type: 'website' },
+  twitter: { card: 'summary', title: TITLE, description: DESCRIPTION },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

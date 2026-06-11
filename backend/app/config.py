@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     github_token: str = ""
     max_files_per_repo: int = 500
     max_file_bytes: int = 500_000
+    clone_depth: int = 300
     supported_extensions_csv: str = ".py,.ts,.tsx,.js,.jsx"
     rate_limit_per_hour: int = 10
     cors_origins_csv: str = "http://localhost:3000"

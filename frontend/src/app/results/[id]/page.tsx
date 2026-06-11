@@ -54,9 +54,7 @@ export default function ResultsPage() {
             branch · {data.branch} · {data.files_analyzed} files · {data.elapsed_seconds}s
           </p>
         </div>
-        <div className="mono rounded-full border border-border bg-panel px-3 py-1 text-xs text-muted">
-          AI-generated ≈ <span className="text-accent">{data.ai_generated_pct?.toFixed?.(0) ?? '0'}%</span>
-        </div>
+        <ProvenanceChip provenance={data.provenance} />
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -80,7 +78,14 @@ export default function ResultsPage() {
 
           <div>
             <h2 className="mb-3 text-lg font-semibold">Action plan</h2>
-            <ActionCards plan={data.action_plan || []} />
+            {(data.action_plan?.length ?? 0) > 0 ? (
+              <ActionCards plan={data.action_plan} />
+            ) : (
+              <div className="rounded-2xl border border-border bg-panel p-5 text-sm text-muted">
+                No category crossed the action threshold — debt is evenly low across the repo.
+                Check the file table above for local hotspots.
+              </div>
+            )}
           </div>
         </div>
 
@@ -92,16 +97,79 @@ export default function ResultsPage() {
             <dl className="space-y-2 text-sm">
               <Stat k="Files analyzed" v={data.files_analyzed} />
               <Stat k="Skipped (too large)" v={data.files_skipped_too_large ?? 0} />
-              <Stat k="AI-generated est." v={`${data.ai_generated_pct?.toFixed?.(1) ?? 0}%`} />
               <Stat k="Elapsed" v={`${data.elapsed_seconds}s`} />
             </dl>
           </Panel>
+          {data.provenance && <ProvenancePanel provenance={data.provenance} />}
           <Panel title="Embed badge">
             <BadgeSnippet owner={data.owner} repo={data.repo} apiBase={API_BASE} analysisId={id ?? ''} />
           </Panel>
         </aside>
       </div>
     </main>
+  );
+}
+
+type Provenance = {
+  commits_sampled: number;
+  history_truncated?: boolean;
+  ai_commits: number;
+  ai_commit_pct: number;
+  automation_commits: number;
+  agents: { name: string; commits: number }[];
+  human_authors: number;
+  velocity: { peak_commits_24h: number; flag: string };
+  likely_ai_assisted: boolean;
+  confidence: string;
+  assessment: string;
+};
+
+function ProvenanceChip({ provenance }: { provenance?: Provenance | null }) {
+  if (!provenance) {
+    return (
+      <div className="mono rounded-full border border-border bg-panel px-3 py-1 text-xs text-muted">
+        AI provenance · no data
+      </div>
+    );
+  }
+  let label: React.ReactNode;
+  if (provenance.ai_commit_pct > 0) {
+    label = (
+      <>
+        AI commits · <span className="text-accent">{provenance.ai_commit_pct}%</span>
+        {provenance.agents[0] ? <span className="text-muted"> · {provenance.agents[0].name}</span> : null}
+      </>
+    );
+  } else if (provenance.likely_ai_assisted) {
+    label = <>AI-likely velocity · <span className="text-accent">no signatures</span></>;
+  } else {
+    label = <>No AI signatures found</>;
+  }
+  return (
+    <div
+      className="mono rounded-full border border-border bg-panel px-3 py-1 text-xs text-muted"
+      title={provenance.assessment}
+    >
+      {label}
+    </div>
+  );
+}
+
+function ProvenancePanel({ provenance }: { provenance: Provenance }) {
+  return (
+    <Panel title="AI provenance · git evidence">
+      <dl className="space-y-2 text-sm">
+        <Stat k="Commits sampled" v={`${provenance.commits_sampled}${provenance.history_truncated ? '+' : ''}`} />
+        <Stat k="AI-signed commits" v={`${provenance.ai_commit_pct}%`} />
+        {provenance.agents.slice(0, 3).map((a) => (
+          <Stat key={a.name} k={a.name} v={a.commits} />
+        ))}
+        {provenance.automation_commits > 0 && <Stat k="Automation bots" v={provenance.automation_commits} />}
+        <Stat k="Human authors" v={provenance.human_authors} />
+        <Stat k="Peak commits / 24h" v={provenance.velocity.peak_commits_24h} />
+      </dl>
+      <p className="mt-3 text-xs leading-relaxed text-muted">{provenance.assessment}</p>
+    </Panel>
   );
 }
 

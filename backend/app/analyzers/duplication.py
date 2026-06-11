@@ -11,8 +11,9 @@ from collections import defaultdict
 
 from datasketch import MinHash, MinHashLSH
 
-from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp
+from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp, aggregate_scores
 from app.analyzers._ast_utils import strip_comments_and_strings
+from app.analyzers._scaffold import is_scaffold
 
 
 _TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|[^\s\w]")
@@ -75,20 +76,25 @@ class DuplicationAnalyzer:
                     best = max(best, jaccard)
                 cross = best
 
-            score = clamp(60 * dup_internal_ratio + 80 * cross)
-            file_results.append(
-                FileResult(
-                    path=f.path,
-                    score=score,
-                    details={
-                        "internal_dup_ratio": round(dup_internal_ratio, 3),
-                        "max_cross_jaccard": round(cross, 3),
-                        "num_duplicate_peers": len(neighbors),
-                    },
-                )
-            )
+            # Framework scaffolding (Next.js layouts, og/twitter image pairs)
+            # is similar by convention — its cross-file similarity is not debt.
+            scaffold = is_scaffold(f.path, f.loc)
+            effective_cross = 0.0 if scaffold else cross
 
-        repo_score = _loc_weighted(file_results, files)
+            # Internal n-gram overlap is a weak signal (idiomatic repetition
+            # inflates it in every codebase); cross-file similarity is the
+            # strong one.
+            score = clamp(45 * dup_internal_ratio + 80 * effective_cross)
+            details = {
+                "internal_dup_ratio": round(dup_internal_ratio, 3),
+                "max_cross_jaccard": round(cross, 3),
+                "num_duplicate_peers": len(neighbors),
+            }
+            if scaffold:
+                details["scaffold"] = True
+            file_results.append(FileResult(path=f.path, score=score, details=details))
+
+        repo_score = aggregate_scores(file_results, files)
         return AnalyzerResult(name=self.name, repo_score=repo_score, file_results=file_results)
 
 
@@ -105,12 +111,3 @@ def _normalize_tokens(tokens: list[str]) -> list[str]:
             out.append(t)
     return out
 
-
-def _loc_weighted(results: list[FileResult], files: list[FileInput]) -> float:
-    if not results:
-        return 0.0
-    loc = {f.path: max(1, f.loc) for f in files}
-    total = sum(loc.get(r.path, 1) for r in results)
-    if total == 0:
-        return 0.0
-    return sum(r.score * loc.get(r.path, 1) for r in results) / total

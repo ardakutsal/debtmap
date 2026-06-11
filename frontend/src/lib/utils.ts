@@ -5,19 +5,20 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Bands must mirror backend grade_for in app/analysis/scoring.py.
 export function gradeColor(score: number): string {
-  if (score <= 20) return '#2ea44f';
-  if (score <= 40) return '#7ec93f';
-  if (score <= 60) return '#e3b341';
-  if (score <= 75) return '#e86a2b';
+  if (score <= 22) return '#2ea44f';
+  if (score <= 42) return '#7ec93f';
+  if (score <= 62) return '#e3b341';
+  if (score <= 77) return '#e86a2b';
   return '#d1242f';
 }
 
 export function gradeFor(score: number): string {
-  if (score <= 20) return 'A';
-  if (score <= 40) return 'B';
-  if (score <= 60) return 'C';
-  if (score <= 75) return 'D';
+  if (score <= 22) return 'A';
+  if (score <= 42) return 'B';
+  if (score <= 62) return 'C';
+  if (score <= 77) return 'D';
   return 'F';
 }
 

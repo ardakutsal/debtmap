@@ -30,7 +30,9 @@ class AnalysisResult(BaseModel):
     branch: str
     debt_score: float
     grade: str
+    # % of sampled commits carrying AI-agent signatures (git metadata evidence)
     ai_generated_pct: float
+    provenance: Optional[dict] = None
     files_analyzed: int
     elapsed_seconds: float
     analyzers: dict

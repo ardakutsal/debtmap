@@ -12,7 +12,7 @@ import math
 import re
 from collections import Counter
 
-from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp
+from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp, aggregate_scores
 from app.analyzers._ast_utils import comment_lines, line_count
 
 
@@ -64,7 +64,7 @@ class CommentPatternsAnalyzer:
                     },
                 )
             )
-        repo_score = _loc_weighted(file_results, files)
+        repo_score = aggregate_scores(file_results, files)
         return AnalyzerResult(name=self.name, repo_score=repo_score, file_results=file_results)
 
     def _extract_comments(self, source: str, language: str) -> list[str]:
@@ -115,12 +115,3 @@ def _penalize_ratio(ratio: float) -> float:
         return clamp(60 + (ratio - 0.40) * 400)
     return clamp((ratio - 0.10) / 0.30 * 60)
 
-
-def _loc_weighted(results, files):
-    if not results:
-        return 0.0
-    loc = {f.path: max(1, f.loc) for f in files}
-    total = sum(loc.get(r.path, 1) for r in results)
-    if total == 0:
-        return 0.0
-    return sum(r.score * loc.get(r.path, 1) for r in results) / total

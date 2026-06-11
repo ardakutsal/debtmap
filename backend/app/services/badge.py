@@ -2,13 +2,14 @@ from __future__ import annotations
 
 
 def color_for(score: float) -> str:
-    if score <= 20:
+    # Must mirror grade bands in app.analysis.scoring.grade_for.
+    if score <= 22:
         return "#2ea44f"
-    if score <= 40:
+    if score <= 42:
         return "#7ec93f"
-    if score <= 60:
+    if score <= 62:
         return "#e3b341"
-    if score <= 75:
+    if score <= 77:
         return "#e86a2b"
     return "#d1242f"
 

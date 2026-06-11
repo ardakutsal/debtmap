@@ -14,13 +14,15 @@ class Grade:
 
 
 def grade_for(score: float) -> str:
-    if score <= 20:
+    # Bands calibrated 2026-06-11: well-regarded mature libraries (requests,
+    # flask, click, httpx) land in A; B starts where real hygiene gaps begin.
+    if score <= 22:
         return "A"
-    if score <= 40:
+    if score <= 42:
         return "B"
-    if score <= 60:
+    if score <= 62:
         return "C"
-    if score <= 75:
+    if score <= 77:
         return "D"
     return "F"
 
@@ -46,19 +48,5 @@ def compute_debt_score(results: dict[str, AnalyzerResult]) -> float:
     return round(min(100.0, max(0.0, 0.5 * raw + 0.5 * sigmoid_smooth(raw))), 2)
 
 
-def estimate_ai_generated_pct(results: dict[str, AnalyzerResult]) -> float:
-    style = {fr.path: fr.score for fr in results.get("style_homogeneity", _empty()).file_results}
-    dup = {fr.path: fr.score for fr in results.get("duplication", _empty()).file_results}
-    cmt = {fr.path: fr.score for fr in results.get("comment_patterns", _empty()).file_results}
-    paths = set(style) | set(dup) | set(cmt)
-    if not paths:
-        return 0.0
-    hits = 0
-    for p in paths:
-        if style.get(p, 0) > 70 and dup.get(p, 0) > 60 and cmt.get(p, 0) > 65:
-            hits += 1
-    return round((hits / len(paths)) * 100, 1)
-
-
-def _empty() -> AnalyzerResult:
-    return AnalyzerResult(name="_", repo_score=0.0)
+# AI-share estimation moved to app.analysis.provenance: git metadata
+# (Co-Authored-By trailers, bot identities) is evidence; code style is not.

@@ -8,7 +8,7 @@ from __future__ import annotations
 import ast
 import re
 
-from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp
+from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp, aggregate_scores
 from app.analyzers._ast_utils import parse_python, python_functions, js_functions_simple
 
 
@@ -26,8 +26,15 @@ class ArchitecturalContractsAnalyzer:
                 score, details = self._python(f.source)
             else:
                 score, details = self._ts(f.source, f.language)
+            # A multi-thousand-line module is structural debt regardless of how
+            # small its individual functions are — the dump-it-all-in-one-file
+            # pattern hurts navigation and review even when handlers stay tidy.
+            module_penalty = clamp((f.loc - 800) / 60, 0, 25)
+            if module_penalty > 0:
+                details["module_size_penalty"] = round(module_penalty, 1)
+            score = clamp(score + module_penalty)
             file_results.append(FileResult(path=f.path, score=score, details=details))
-        return AnalyzerResult(name=self.name, repo_score=_loc_weighted(file_results, files), file_results=file_results)
+        return AnalyzerResult(name=self.name, repo_score=aggregate_scores(file_results, files), file_results=file_results)
 
     def _python(self, source: str) -> tuple[float, dict]:
         tree = parse_python(source)
@@ -45,12 +52,14 @@ class ArchitecturalContractsAnalyzer:
             if (getattr(c, "end_lineno", c.lineno) or c.lineno) - c.lineno > 500
         )
         no_ann_ratio = 0.0 if total == 0 else 1.0 - annotated / total
+        # Missing annotations are a style choice in pre-typing-era codebases,
+        # not debt per se — oversized units are the load-bearing signal here.
         score = clamp(
-            no_ann_ratio * 55
-            + huge_fn * 15
-            + god_fn * 6
-            + god_cls * 12
-            + many_args * 3
+            no_ann_ratio * 12
+            + huge_fn * 22
+            + god_fn * 12
+            + god_cls * 16
+            + many_args * 4
         )
         return score, {
             "num_functions": total,
@@ -70,7 +79,7 @@ class ArchitecturalContractsAnalyzer:
         any_count = len(_ANY_TYPE.findall(source)) if language in ("ts", "tsx") else 0
         typed_sites = len(_TS_FN_WITH_TYPES.findall(source))
         any_density = any_count / max(1, typed_sites + any_count) if language in ("ts", "tsx") else 0
-        score = clamp(any_density * 55 + huge * 12 + god * 6 + many_args * 3 + (10 if typed_sites == 0 and language in ("ts", "tsx") else 0))
+        score = clamp(any_density * 45 + huge * 15 + god * 10 + many_args * 4 + (10 if typed_sites == 0 and language in ("ts", "tsx") else 0))
         return score, {
             "num_functions": total,
             "huge_functions": huge,
@@ -80,12 +89,3 @@ class ArchitecturalContractsAnalyzer:
             "any_density": round(any_density, 3),
         }
 
-
-def _loc_weighted(results, files):
-    if not results:
-        return 0.0
-    loc = {f.path: max(1, f.loc) for f in files}
-    total = sum(loc.get(r.path, 1) for r in results)
-    if total == 0:
-        return 0.0
-    return sum(r.score * loc.get(r.path, 1) for r in results) / total

@@ -9,7 +9,7 @@ from __future__ import annotations
 import ast
 import re
 
-from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp
+from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp, aggregate_scores
 from app.analyzers._ast_utils import parse_python
 
 
@@ -30,7 +30,7 @@ class ErrorHandlingAnalyzer:
             else:
                 score, details = self._analyze_js(f.source)
             file_results.append(FileResult(path=f.path, score=score, details=details))
-        return AnalyzerResult(name=self.name, repo_score=_loc_weighted(file_results, files), file_results=file_results)
+        return AnalyzerResult(name=self.name, repo_score=aggregate_scores(file_results, files), file_results=file_results)
 
     def _analyze_python(self, source: str) -> tuple[float, dict]:
         tree = parse_python(source)
@@ -86,12 +86,3 @@ def _is_in_with(call_node: ast.Call, tree: ast.AST) -> bool:
                     return True
     return False
 
-
-def _loc_weighted(results, files):
-    if not results:
-        return 0.0
-    loc = {f.path: max(1, f.loc) for f in files}
-    total = sum(loc.get(r.path, 1) for r in results)
-    if total == 0:
-        return 0.0
-    return sum(r.score * loc.get(r.path, 1) for r in results) / total

@@ -36,3 +36,22 @@ def sprawling_processor(payload, ctx, logger, retries=3, timeout=10):
     u_score = analyzer.analyze([uniform], {}).repo_score
     v_score = analyzer.analyze([varied], {}).repo_score
     assert u_score > v_score
+
+
+def test_scaffold_layout_stub_skipped():
+    from tests.conftest import make_file
+
+    layout = """
+import type { Metadata } from "next";
+export const metadata: Metadata = {
+  title: "Dashboard",
+  description: "Manage your profile.",
+};
+export default function Layout({ children }) {
+  return children;
+}
+"""
+    f = make_file("app/dashboard/layout.tsx", layout, language="tsx")
+    result = StyleHomogeneityAnalyzer().analyze([f], {})
+    assert result.file_results == []
+    assert result.repo_score == 0.0

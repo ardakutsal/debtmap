@@ -48,8 +48,10 @@ def clone_repo(url: str, branch: str, token: str | None, dest: str) -> str:
         netloc = f"{token}@{parsed.netloc}"
         clone_url = parsed._replace(netloc=netloc).geturl()
 
+    # Depth must cover enough history for provenance sampling, not just HEAD.
+    depth = get_settings().clone_depth
     try:
-        Repo.clone_from(clone_url, dest, depth=50, branch=branch, multi_options=["--no-tags"])
+        Repo.clone_from(clone_url, dest, depth=depth, branch=branch, multi_options=["--no-tags"])
         return branch
     except GitCommandError as exc:
         msg = str(exc).lower()
@@ -57,7 +59,7 @@ def clone_repo(url: str, branch: str, token: str | None, dest: str) -> str:
             import shutil as _shutil
             _shutil.rmtree(dest, ignore_errors=True)
             try:
-                repo = Repo.clone_from(clone_url, dest, depth=50, multi_options=["--no-tags"])
+                repo = Repo.clone_from(clone_url, dest, depth=depth, multi_options=["--no-tags"])
                 return repo.active_branch.name
             except GitCommandError as exc2:
                 raise _friendly_clone_error(exc2) from exc2
@@ -90,6 +92,8 @@ def load_files_from_dir(root: str) -> LoadedRepo:
         if any(part in {".git", "node_modules", "dist", "build", ".next", "__pycache__", "venv", ".venv"} for part in path.parts):
             continue
         if path.suffix not in settings.supported_extensions:
+            continue
+        if path.name.endswith(".d.ts"):
             continue
         total += 1
         try:

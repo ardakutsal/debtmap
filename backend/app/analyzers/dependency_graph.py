@@ -14,7 +14,7 @@ from collections import defaultdict
 
 import networkx as nx
 
-from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp
+from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp, aggregate_scores
 from app.analyzers._ast_utils import parse_python
 
 
@@ -62,12 +62,17 @@ class DependencyGraphAnalyzer:
             fan_in = len([e for e in graph.in_edges(f.path)])
             is_config = "config" in f.path.lower() or "settings" in f.path.lower()
             env_penalty = env_hits[f.path] * (0 if is_config else 5)
-            cycle_penalty = 35 if f.path in cycle_members else 0
-            fanout_penalty = max(0, fan_out - 15) * 3
-            fanin_penalty = max(0, fan_in - 20) * 2
+            # Cycles are real debt, but mature packages often carry deliberate
+            # lazy-import cycles — penalize without letting them dominate.
+            cycle_penalty = 25 if f.path in cycle_members else 0
+            # High fan-in is reuse, not debt — a widely-imported utils module is
+            # healthy. Only excessive fan-out (a module that reaches everywhere)
+            # signals coupling, and mature packages legitimately re-export, so
+            # the threshold is generous.
+            fanout_penalty = max(0, fan_out - 20) * 2
             globals_penalty = globals_hits[f.path] * 8
 
-            score = clamp(cycle_penalty + fanout_penalty + fanin_penalty + env_penalty + globals_penalty)
+            score = clamp(cycle_penalty + fanout_penalty + env_penalty + globals_penalty)
             file_results.append(
                 FileResult(
                     path=f.path,
@@ -82,7 +87,7 @@ class DependencyGraphAnalyzer:
                 )
             )
         notes = [f"Detected {len(cycle_members)} files in import cycles"] if cycle_members else []
-        return AnalyzerResult(name=self.name, repo_score=_loc_weighted(file_results, files), file_results=file_results, notes=notes)
+        return AnalyzerResult(name=self.name, repo_score=aggregate_scores(file_results, files), file_results=file_results, notes=notes)
 
     def _imports(self, f: FileInput) -> set[str]:
         out: set[str] = set()
@@ -128,12 +133,3 @@ def _resolve(imp: str, from_path: str, paths: set[str]) -> str | None:
                     return p
     return None
 
-
-def _loc_weighted(results, files):
-    if not results:
-        return 0.0
-    loc = {f.path: max(1, f.loc) for f in files}
-    total = sum(loc.get(r.path, 1) for r in results)
-    if total == 0:
-        return 0.0
-    return sum(r.score * loc.get(r.path, 1) for r in results) / total

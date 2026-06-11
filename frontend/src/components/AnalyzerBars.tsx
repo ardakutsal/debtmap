@@ -10,6 +10,7 @@ const LABELS: Record<string, string> = {
   architectural_contracts: 'Architectural Contracts',
   dependency_graph: 'Dependency Graph',
   code_churn: 'Code Churn',
+  test_coverage: 'Test Coverage',
 };
 
 export function AnalyzerBars({ analyzers }: { analyzers: Record<string, { score: number; weight: number; skipped?: boolean }> }) {
@@ -23,7 +24,9 @@ export function AnalyzerBars({ analyzers }: { analyzers: Record<string, { score:
               <span className="text-muted">{LABELS[name] ?? name}</span>
               <span className="mono">
                 {v.skipped ? 'skipped' : score.toFixed(0)}
-                <span className="ml-2 text-muted">· {Math.round(v.weight * 100)}%</span>
+                <span className="ml-2 text-muted">
+                  · {v.weight > 0 ? `${Math.round(v.weight * 100)}%` : 'info'}
+                </span>
               </span>
             </div>
             <div className="h-2 rounded-full bg-panel2">

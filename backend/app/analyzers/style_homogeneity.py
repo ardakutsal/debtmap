@@ -14,8 +14,9 @@ import math
 import re
 from collections import Counter
 
-from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp
+from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp, aggregate_scores
 from app.analyzers._ast_utils import parse_python, python_functions, js_functions_simple
+from app.analyzers._scaffold import is_scaffold
 
 
 _IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -29,6 +30,10 @@ class StyleHomogeneityAnalyzer:
         all_func_lengths: list[int] = []
 
         for f in files:
+            # Scaffold stubs (metadata layouts, og-image files) are uniform by
+            # framework convention — scoring their "style" is pure noise.
+            if is_scaffold(f.path, f.loc):
+                continue
             fn_lengths = self._fn_lengths(f)
             identifiers = _IDENT_RE.findall(f.source)
             ident_lengths = [len(i) for i in identifiers] or [1]
@@ -43,7 +48,14 @@ class StyleHomogeneityAnalyzer:
             entropy_score = 100 - _scale(ident_entropy, 0, 3.5)
             indent_score = _scale(indent_uniformity, 0, 1.0)
 
-            score = clamp(0.45 * variance_score + 0.35 * entropy_score + 0.20 * indent_score)
+            # Indent uniformity barely matters: formatters make every healthy
+            # codebase uniform, so it carries the smallest weight.
+            if len(fn_lengths) >= 3:
+                score = clamp(0.50 * variance_score + 0.40 * entropy_score + 0.10 * indent_score)
+            else:
+                # Under 3 functions, length variance is meaningless — renormalize
+                # the remaining components instead of scoring fake uniformity.
+                score = clamp((0.40 * entropy_score + 0.10 * indent_score) / 0.50)
             file_results.append(
                 FileResult(
                     path=f.path,
@@ -58,7 +70,7 @@ class StyleHomogeneityAnalyzer:
             )
             all_func_lengths.extend(fn_lengths)
 
-        repo_score = _weighted_average(file_results, files)
+        repo_score = aggregate_scores(file_results, files)
         notes: list[str] = []
         if len(all_func_lengths) >= 5:
             repo_variance = _normalized_stdev(all_func_lengths)
@@ -116,12 +128,3 @@ def _scale(value: float, lo: float, hi: float) -> float:
         return 0.0
     return clamp(((value - lo) / (hi - lo)) * 100)
 
-
-def _weighted_average(results: list[FileResult], files: list[FileInput]) -> float:
-    if not results:
-        return 0.0
-    loc_by_path = {f.path: max(1, f.loc) for f in files}
-    total_loc = sum(loc_by_path.get(r.path, 1) for r in results)
-    if total_loc == 0:
-        return 0.0
-    return sum(r.score * loc_by_path.get(r.path, 1) for r in results) / total_loc

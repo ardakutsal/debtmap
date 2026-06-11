@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 
 import httpx
 
-from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp
+from app.analyzers.base import AnalyzerResult, FileInput, FileResult, clamp, aggregate_scores
 
 
 MIN_REMAINING = 5          # stop calling once quota is nearly gone
@@ -112,7 +112,7 @@ class CodeChurnAnalyzer:
             notes.append(f"github rate-limit remaining: {remaining_after}")
         return AnalyzerResult(
             name=self.name,
-            repo_score=_loc_weighted(file_results, files),
+            repo_score=aggregate_scores(file_results, files),
             file_results=file_results,
             notes=notes,
         )
@@ -162,12 +162,3 @@ def _remaining(resp: httpx.Response) -> int | None:
 def _skipped(reason: str) -> AnalyzerResult:
     return AnalyzerResult(name="code_churn", repo_score=50.0, skipped=True, notes=[reason])
 
-
-def _loc_weighted(results, files):
-    if not results:
-        return 0.0
-    loc = {f.path: max(1, f.loc) for f in files}
-    total = sum(loc.get(r.path, 1) for r in results)
-    if total == 0:
-        return 0.0
-    return sum(r.score * loc.get(r.path, 1) for r in results) / total

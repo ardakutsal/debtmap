@@ -15,7 +15,8 @@ from app.analysis.repo_loader import (
     parse_repo_url,
     temp_clone_dir,
 )
-from app.analysis.scoring import compute_debt_score, estimate_ai_generated_pct, grade_for
+from app.analysis.provenance import analyze_provenance
+from app.analysis.scoring import compute_debt_score, grade_for
 from app.analyzers import ANALYZERS, ANALYZER_WEIGHTS
 from app.analyzers.base import AnalyzerResult, FileInput
 
@@ -43,7 +44,6 @@ def analyze_files(
     return {
         "debt_score": debt_score,
         "grade": grade_for(debt_score),
-        "ai_generated_pct": estimate_ai_generated_pct(results),
         "analyzers": {
             name: {
                 "score": round(r.repo_score, 2),
@@ -100,6 +100,9 @@ def analyze_repo(url: str, branch: str = "main", github_token: str | None = None
         actual_branch = clone_repo(url, branch, github_token, work)
         branch = actual_branch
         if progress:
+            progress(12, "Reading commit history")
+        provenance = analyze_provenance(work)
+        if progress:
             progress(15, "Scanning files")
         loaded = load_files_from_dir(work)
         loaded.owner = owner
@@ -122,6 +125,10 @@ def analyze_repo(url: str, branch: str = "main", github_token: str | None = None
             "files_analyzed": len(loaded.files),
             "files_skipped_too_large": loaded.skipped_too_large,
             "elapsed_seconds": round(elapsed, 2),
+            # ai_generated_pct now means "% of sampled commits with AI-agent
+            # signatures" — evidence from git metadata, not a style guess.
+            "ai_generated_pct": provenance["ai_commit_pct"] if provenance else 0.0,
+            "provenance": provenance,
             **result,
         }
     finally:

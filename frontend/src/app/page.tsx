@@ -69,9 +69,10 @@ export default function LandingPage() {
           <span className="text-accent">has debt.</span> Find it.
         </h1>
         <p className="mt-6 max-w-2xl text-lg text-muted">
-          DebtMap scans a GitHub repo for the seven telltale patterns of AI-generated sprawl
-          — duplication, silent error swallowing, style uniformity, god classes and more — and
-          returns a single score, a file-level heatmap, and a prioritized fix list.
+          DebtMap scans a GitHub repo for the telltale patterns of AI-era sprawl
+          — duplication, silent error swallowing, missing tests, god files — plus
+          git-evidence AI provenance, and returns a single score, a file-level
+          heatmap, and a prioritized fix list.
         </p>
 
         <form onSubmit={onSubmit} className="mt-10 w-full max-w-2xl">
@@ -117,8 +118,8 @@ export default function LandingPage() {
           },
           {
             n: '02',
-            title: 'Seven analyzers run',
-            body: 'Style homogeneity, duplication, comments, error handling, contracts, imports, churn.',
+            title: 'Eight analyzers run',
+            body: 'Error handling, duplication, contracts, tests, comments, imports, churn — plus git-metadata AI provenance.',
           },
           {
             n: '03',
@@ -136,14 +137,14 @@ export default function LandingPage() {
 
       <section className="grid gap-4 md:grid-cols-4">
         {[
-          ['Style Homogeneity', '15%'],
-          ['Duplication', '25%'],
+          ['Error Handling', '25%'],
+          ['Duplication', '20%'],
+          ['Arch. Contracts', '20%'],
+          ['Test Coverage', '10%'],
           ['Comment Patterns', '10%'],
-          ['Error Handling', '20%'],
-          ['Arch. Contracts', '15%'],
           ['Dependency Graph', '10%'],
           ['Code Churn', '5%'],
-          ['AI-Gen Estimate', '—'],
+          ['AI Provenance', 'git evidence'],
         ].map(([label, w]) => (
           <div key={label} className="rounded-xl border border-border bg-panel2 p-4">
             <div className="text-sm font-medium">{label}</div>

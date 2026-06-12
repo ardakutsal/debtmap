@@ -25,5 +25,9 @@ celery_app.conf.update(
             "task": "debtmap.purge_tokens",
             "schedule": 3600.0,
         },
+        "refresh-recent-repos": {
+            "task": "debtmap.refresh_recent_repos",
+            "schedule": 7 * 24 * 3600.0,
+        },
     },
 )

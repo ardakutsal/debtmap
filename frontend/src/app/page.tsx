@@ -7,6 +7,8 @@ import { apiUrl } from '@/lib/utils';
 export default function LandingPage() {
   const router = useRouter();
   const [url, setUrl] = useState('');
+  const [token, setToken] = useState('');
+  const [showToken, setShowToken] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,7 +26,11 @@ export default function LandingPage() {
         resp = await fetch(apiUrl('/analyze'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ repo_url: url, branch: 'main' }),
+          body: JSON.stringify({
+            repo_url: url,
+            branch: 'main',
+            ...(token.trim() ? { github_token: token.trim() } : {}),
+          }),
         });
       } catch {
         throw new Error('API unreachable — is the backend running on port 8000?');
@@ -54,9 +60,10 @@ export default function LandingPage() {
           </span>
         </div>
         <nav className="flex items-center gap-6 text-sm text-muted">
+          <a href="/leaderboard" className="hover:text-text">Leaderboard</a>
+          <a href="/compare" className="hover:text-text">Compare</a>
           <a href="https://github.com/ardakutsal/debtmap" className="hover:text-text">GitHub</a>
           <a href="#how" className="hover:text-text">How it works</a>
-          <a href="#badge" className="hover:text-text">Badge</a>
         </nav>
       </header>
 
@@ -94,9 +101,27 @@ export default function LandingPage() {
             </button>
           </div>
           {error && <p className="mono mt-3 text-sm text-danger">{error}</p>}
-          <p className="mt-3 text-xs text-muted">
-            Free · No auth required · Up to 500 files per repo · Analysis ~30–60s
-          </p>
+          <div className="mt-3 flex items-center justify-center gap-4 text-xs text-muted">
+            <span>Free · No auth required · Up to 500 files per repo · Analysis ~30–60s</span>
+            <button
+              type="button"
+              onClick={() => setShowToken((v) => !v)}
+              className="mono underline-offset-2 hover:text-text hover:underline"
+            >
+              {showToken ? 'hide token' : 'private repo?'}
+            </button>
+          </div>
+          {showToken && (
+            <div className="mx-auto mt-3 max-w-md">
+              <input
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="GitHub token (read-only) — encrypted, purged after 1h"
+                className="mono w-full rounded-lg border border-border bg-panel2 px-3 py-2 text-xs outline-none placeholder:text-muted"
+              />
+            </div>
+          )}
         </form>
 
         <div id="badge" className="mono mt-12 flex items-center gap-3 rounded-lg border border-border bg-panel px-4 py-3 text-xs text-muted">

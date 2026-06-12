@@ -12,4 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 ENV PYTHONPATH=/app
 
-CMD ["celery", "-A", "app.services.celery_app.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+# -B embeds the beat scheduler — one container runs worker + schedules
+# (purge_tokens hourly, refresh_recent_repos weekly). Keep replicas=1.
+CMD ["celery", "-A", "app.services.celery_app.celery_app", "worker", "-B", "--loglevel=info", "--concurrency=2"]

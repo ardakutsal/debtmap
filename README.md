@@ -1,6 +1,11 @@
 # DebtMap
 
+[![CI](https://github.com/ardakutsal/debtmap/actions/workflows/ci.yml/badge.svg)](https://github.com/ardakutsal/debtmap/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+
 > Technical-debt scanner for AI-generated and "vibe-coded" repositories.
+
+**Try it live: [frontend-production-b171.up.railway.app](https://frontend-production-b171.up.railway.app)** — paste a GitHub URL, get a report in ~30s. [Leaderboard](https://frontend-production-b171.up.railway.app/leaderboard) · [Compare two repos](https://frontend-production-b171.up.railway.app/compare) · [Example report](https://frontend-production-b171.up.railway.app/results/b986c4f382e044c38853aacb61bee754)
 
 DebtMap takes a GitHub URL, runs eight analyzers against the code, and returns:
 
@@ -125,6 +130,23 @@ When complete: full payload with `debt_score`, `grade`, `ai_generated_pct`,
 
 ### `GET /badge/{owner}/{repo}`
 Returns an SVG badge, cached 1 hour, ETag-enabled.
+
+### `GET /repos/{owner}/{repo}/latest` · `GET /leaderboard`
+Latest completed report for a repo; latest scan per distinct repo, best score first.
+
+### `POST /results/{id}/deep-scan` · `GET /results/{id}/deep-scan`
+LLM architect review (Claude Haiku per-file + Sonnet synthesis). Only active when
+the instance sets `ANTHROPIC_API_KEY`; per-IP daily quota and a monthly USD cap
+are enforced (`DEEP_SCAN_*` settings).
+
+## Integrations
+
+- **MCP server** — let your coding agent scan repos (including its own output):
+  [`integrations/mcp-server`](./integrations/mcp-server). Tools: `scan_repo`,
+  `get_report`, `compare_repos`.
+- **Compare** — `/compare?a=owner/repo&b=owner/repo` on the web UI.
+- **Weekly refresh** — repos scanned in the last 90 days are re-scanned weekly
+  so badges and the leaderboard stay current.
 
 ## Safety & limits
 

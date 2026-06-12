@@ -61,8 +61,11 @@ def health():
     except Exception:
         db_ok = False
 
-    status = "ok" if (db_ok and redis_ok) else "degraded"
-    return {"status": status, "version": app.version, "redis": redis_ok, "db": db_ok}
+    payload = {"status": "ok" if (db_ok and redis_ok) else "degraded", "version": app.version, "redis": redis_ok, "db": db_ok}
+    if payload["status"] != "ok":
+        # 503 so platform health checks actually alarm instead of silently passing.
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @app.post("/analyze", response_model=AnalyzeResponse, status_code=202)
@@ -80,6 +83,50 @@ def analyze(request: Request, body: AnalyzeRequest) -> AnalyzeResponse:
             owner, repo = parse_repo_url(url)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid GitHub URL")
+
+        # Reuse a fresh completed scan of the same repo+branch instead of
+        # re-running — keeps viral traffic from melting the worker.
+        if not body.force:
+            reuse_cutoff = datetime.utcnow() - timedelta(hours=settings.reuse_window_hours)
+            recent = (
+                session.query(Analysis)
+                .filter(
+                    Analysis.owner == owner,
+                    Analysis.repo == repo,
+                    Analysis.branch == body.branch,
+                    Analysis.status == "completed",
+                    Analysis.updated_at >= reuse_cutoff,
+                )
+                .order_by(Analysis.updated_at.desc())
+                .first()
+            )
+            if recent is not None:
+                return AnalyzeResponse(
+                    analysis_id=recent.id, status="completed", status_url=f"/results/{recent.id}"
+                )
+            inflight_cutoff = datetime.utcnow() - timedelta(minutes=settings.inflight_window_minutes)
+            inflight = (
+                session.query(Analysis)
+                .filter(
+                    Analysis.owner == owner,
+                    Analysis.repo == repo,
+                    Analysis.branch == body.branch,
+                    Analysis.status.in_(["queued", "running"]),
+                    Analysis.created_at >= inflight_cutoff,
+                )
+                .order_by(Analysis.created_at.desc())
+                .first()
+            )
+            if inflight is not None:
+                return AnalyzeResponse(
+                    analysis_id=inflight.id, status=inflight.status, status_url=f"/results/{inflight.id}"
+                )
+
+        queue_depth = (
+            session.query(Analysis).filter(Analysis.status.in_(["queued", "running"])).count()
+        )
+        if queue_depth >= settings.max_queue_depth:
+            raise HTTPException(status_code=503, detail="Scanner is busy — try again in a few minutes.")
 
         encrypted = encrypt(body.github_token) if body.github_token else None
         record = Analysis(
@@ -134,7 +181,176 @@ def get_result(analysis_id: str):
         payload = load_result(record.result_json) or {}
         payload["analysis_id"] = analysis_id
         payload["status"] = "completed"
+        from app.services.deep_scan import deep_scan_enabled
+
+        payload["deep_scan_enabled"] = deep_scan_enabled()
         return payload
+    finally:
+        session.close()
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+@app.post("/results/{analysis_id}/deep-scan", status_code=202)
+def start_deep_scan(analysis_id: str, request: Request):
+    from datetime import timedelta as _td
+
+    from app.models.db import DeepScan
+    from app.services.deep_scan import deep_scan_enabled, monthly_spend_usd
+
+    if not deep_scan_enabled():
+        raise HTTPException(status_code=503, detail="Deep Scan is not enabled on this instance.")
+
+    session = get_session()
+    try:
+        record = session.get(Analysis, analysis_id)
+        if record is None or record.status != "completed":
+            raise HTTPException(status_code=404, detail="Completed analysis not found")
+
+        existing = (
+            session.query(DeepScan)
+            .filter(DeepScan.analysis_id == analysis_id, DeepScan.status.in_(["queued", "running", "completed"]))
+            .order_by(DeepScan.created_at.desc())
+            .first()
+        )
+        if existing is not None:
+            return {"deep_scan_id": existing.id, "status": existing.status}
+
+        ip = _client_ip(request)
+        day_ago = datetime.utcnow() - _td(hours=24)
+        used_today = (
+            session.query(DeepScan).filter(DeepScan.ip == ip, DeepScan.created_at >= day_ago).count()
+        )
+        if used_today >= settings.deep_scan_daily_per_ip:
+            raise HTTPException(status_code=429, detail="Daily Deep Scan quota reached — try again tomorrow.")
+        if monthly_spend_usd(session) >= settings.deep_scan_monthly_cap_usd:
+            raise HTTPException(
+                status_code=503, detail="Deep Scan monthly budget exhausted on this instance."
+            )
+
+        ds = DeepScan(id=uuid.uuid4().hex, analysis_id=analysis_id, ip=ip, status="queued")
+        session.add(ds)
+        session.commit()
+        ds_id = ds.id
+    finally:
+        session.close()
+
+    from app.services.deep_scan import run_deep_scan
+
+    run_deep_scan.delay(ds_id)
+    return {"deep_scan_id": ds_id, "status": "queued"}
+
+
+@app.get("/results/{analysis_id}/deep-scan")
+def get_deep_scan(analysis_id: str):
+    from app.models.db import DeepScan
+
+    session = get_session()
+    try:
+        ds = (
+            session.query(DeepScan)
+            .filter(DeepScan.analysis_id == analysis_id)
+            .order_by(DeepScan.created_at.desc())
+            .first()
+        )
+        if ds is None:
+            raise HTTPException(status_code=404, detail="No deep scan for this analysis")
+        payload = {
+            "deep_scan_id": ds.id,
+            "status": ds.status,
+            "error": ds.error,
+            "cost_usd": ds.cost_usd,
+        }
+        if ds.status == "completed" and ds.memo_json:
+            payload.update(load_result(ds.memo_json) or {})
+        return payload
+    finally:
+        session.close()
+
+
+@app.get("/repos/{owner}/{repo}/latest")
+def latest_for_repo(owner: str, repo: str):
+    session = get_session()
+    try:
+        latest = (
+            session.query(Analysis)
+            .filter(Analysis.owner == owner, Analysis.repo == repo, Analysis.status == "completed")
+            .order_by(Analysis.updated_at.desc())
+            .first()
+        )
+        if latest is None:
+            raise HTTPException(status_code=404, detail="No completed analysis for this repository")
+        payload = load_result(latest.result_json) or {}
+        payload["analysis_id"] = latest.id
+        payload["status"] = "completed"
+        payload["updated_at"] = latest.updated_at.isoformat()
+        return payload
+    finally:
+        session.close()
+
+
+@app.get("/leaderboard")
+def leaderboard(limit: int = 50):
+    """Latest completed analysis per distinct repo, best DebtScore first."""
+    limit = max(1, min(int(limit), 100))
+    session = get_session()
+    try:
+        from sqlalchemy import func
+
+        sub = (
+            session.query(
+                Analysis.owner,
+                Analysis.repo,
+                func.max(Analysis.updated_at).label("latest"),
+            )
+            .filter(Analysis.status == "completed", Analysis.debt_score.isnot(None))
+            .group_by(Analysis.owner, Analysis.repo)
+            .subquery()
+        )
+        rows = (
+            session.query(Analysis)
+            .join(
+                sub,
+                (Analysis.owner == sub.c.owner)
+                & (Analysis.repo == sub.c.repo)
+                & (Analysis.updated_at == sub.c.latest),
+            )
+            .filter(Analysis.status == "completed")
+            .order_by(Analysis.debt_score.asc())
+            .limit(limit * 2)
+            .all()
+        )
+        out = []
+        seen: set[tuple[str, str]] = set()
+        for r in rows:
+            key = (r.owner, r.repo)
+            if key in seen:
+                continue
+            seen.add(key)
+            result = load_result(r.result_json) or {}
+            files = result.get("files_analyzed", 0)
+            if files < 10:  # skip junk/tiny scans
+                continue
+            out.append(
+                {
+                    "owner": r.owner,
+                    "repo": r.repo,
+                    "debt_score": r.debt_score,
+                    "grade": r.grade,
+                    "ai_generated_pct": r.ai_generated_pct,
+                    "files_analyzed": files,
+                    "analysis_id": r.id,
+                    "updated_at": r.updated_at.isoformat(),
+                }
+            )
+            if len(out) >= limit:
+                break
+        return {"entries": out}
     finally:
         session.close()
 

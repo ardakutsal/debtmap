@@ -1,0 +1,20 @@
+name: Bug report
+description: Something is broken or a score looks wrong
+labels: [bug]
+body:
+  - type: input
+    id: repo
+    attributes:
+      label: Repository scanned (if score-related)
+      placeholder: owner/repo
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include the result URL if you have one.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?

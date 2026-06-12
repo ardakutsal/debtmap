@@ -52,8 +52,12 @@ def test_full_analyze_flow(local_repo, tmp_path, monkeypatch):
 
     client = TestClient(app)
 
-    health = client.get("/health").json()
-    assert health["status"] == "ok"
+    health_resp = client.get("/health")
+    health = health_resp.json()
+    # Redis may not run on contributor machines/CI: db must be up, redis may
+    # legitimately report degraded (503).
+    assert health["db"] is True
+    assert health_resp.status_code == (200 if health["redis"] else 503)
 
     resp = client.post(
         "/analyze",
@@ -63,17 +67,18 @@ def test_full_analyze_flow(local_repo, tmp_path, monkeypatch):
     assert resp.status_code in (400, 422)
 
     # Direct runner test against local path (the happy path we wire into /analyze via the
-    # worker). We stub the cloner to copy the local repo instead.
-    import app.analysis.repo_loader as loader
+    # worker). Patch the runner's own bindings — patching repo_loader is a no-op
+    # once another test has already imported the runner module.
+    import app.analysis.runner as runner_mod
 
     def fake_clone(url, branch, token, dest):
         subprocess.check_call(["git", "clone", "-q", url.replace("file://", ""), dest])
+        return branch
 
-    monkeypatch.setattr(loader, "clone_repo", fake_clone)
-    monkeypatch.setattr(loader, "parse_repo_url", lambda url: ("local", "sample"))
+    monkeypatch.setattr(runner_mod, "clone_repo", fake_clone)
+    monkeypatch.setattr(runner_mod, "parse_repo_url", lambda url: ("local", "sample"))
 
-    from app.analysis.runner import analyze_repo
-    result = analyze_repo(f"file://{local_repo}", branch="main")
+    result = runner_mod.analyze_repo(f"file://{local_repo}", branch="main")
     assert result["owner"] == "local"
     assert result["repo"] == "sample"
     assert 0 <= result["debt_score"] <= 100

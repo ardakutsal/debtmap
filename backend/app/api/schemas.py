@@ -7,6 +7,8 @@ class AnalyzeRequest(BaseModel):
     repo_url: HttpUrl
     branch: str = Field(default="main", max_length=200)
     github_token: Optional[str] = Field(default=None, max_length=200)
+    # Skip the recent-scan reuse cache and force a fresh run.
+    force: bool = False
 
 
 class AnalyzeResponse(BaseModel):

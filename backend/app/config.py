@@ -18,6 +18,20 @@ class Settings(BaseSettings):
     rate_limit_per_hour: int = 10
     cors_origins_csv: str = "http://localhost:3000"
 
+    # Abuse / cost controls (Faz 1)
+    max_repo_size_kb: int = 500_000  # GitHub-reported size; ~500 MB
+    reuse_window_hours: int = 6      # serve a recent completed scan instead of re-running
+    inflight_window_minutes: int = 30
+    max_queue_depth: int = 25
+
+    # Deep Scan (Faz 2) — disabled until anthropic_api_key is set
+    anthropic_api_key: str = ""
+    deep_scan_file_model: str = "claude-haiku-4-5"
+    deep_scan_synthesis_model: str = "claude-sonnet-4-6"
+    deep_scan_top_files: int = 12
+    deep_scan_daily_per_ip: int = 3
+    deep_scan_monthly_cap_usd: float = 100.0
+
     @property
     def supported_extensions(self) -> list[str]:
         return [s.strip() for s in self.supported_extensions_csv.split(",") if s.strip()]

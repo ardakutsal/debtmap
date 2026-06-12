@@ -35,6 +35,22 @@ class Analysis(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class DeepScan(Base):
+    __tablename__ = "deep_scans"
+
+    id = Column(String(64), primary_key=True)
+    analysis_id = Column(String(64), nullable=False, index=True)
+    ip = Column(String(64), nullable=False, default="")
+    status = Column(String(32), nullable=False, default="queued")
+    memo_json = Column(Text, nullable=True)
+    error = Column(Text, nullable=True)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+    cost_usd = Column(Float, nullable=False, default=0.0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 _engine = None
 _SessionLocal: sessionmaker | None = None
 

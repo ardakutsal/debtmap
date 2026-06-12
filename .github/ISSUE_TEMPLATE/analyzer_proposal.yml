@@ -1,0 +1,15 @@
+name: Analyzer / detection proposal
+description: Propose a new debt signal or an AI-provenance detection rule
+labels: [enhancement]
+body:
+  - type: textarea
+    id: signal
+    attributes:
+      label: What signal, and why is it real debt (or real provenance)?
+    validations:
+      required: true
+  - type: textarea
+    id: calibration
+    attributes:
+      label: How should it behave on mature human repos vs vibe-coded repos?
+      description: Every analyzer change goes through scripts/calibrate.py.

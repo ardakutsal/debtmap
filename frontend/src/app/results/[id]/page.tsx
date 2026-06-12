@@ -11,6 +11,7 @@ import { ActionCards } from '@/components/ActionCards';
 import { FileTable } from '@/components/FileTable';
 import { AnalyzerBars } from '@/components/AnalyzerBars';
 import { BadgeSnippet } from '@/components/BadgeSnippet';
+import { DeepScanPanel } from '@/components/DeepScanPanel';
 
 const fetcher = async (url: string) => {
   let resp: Response;
@@ -75,6 +76,8 @@ export default function ResultsPage() {
           <Panel title="Top debt-heavy files">
             <FileTable rows={data.file_summary || []} />
           </Panel>
+
+          {data.deep_scan_enabled && id && <DeepScanPanel analysisId={id} />}
 
           <div>
             <h2 className="mb-3 text-lg font-semibold">Action plan</h2>

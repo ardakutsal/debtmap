@@ -19,7 +19,8 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       title,
       description,
       openGraph: { title, description, siteName: 'DebtMap', type: 'website' },
-      twitter: { card: 'summary', title, description },
+      // og/twitter images come from the segment's opengraph-image.tsx route.
+      twitter: { card: 'summary_large_image', title, description },
     };
   } catch {
     return fallback;

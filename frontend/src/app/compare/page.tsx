@@ -153,8 +153,12 @@ function CompareCard({ side }: { side: Side }) {
         </span>
       </div>
       <p className="mono mb-4 text-xs text-muted">
-        {d.files_analyzed} files · AI commits {d.ai_generated_pct ?? 0}%
-        {d.provenance?.agents?.[0] ? ` (${d.provenance.agents[0].name})` : ''}
+        {d.files_analyzed} files ·{' '}
+        {(d.ai_generated_pct ?? 0) > 0
+          ? `AI-signed ${d.ai_generated_pct}%${d.provenance?.agents?.[0] ? ` (${d.provenance.agents[0].name})` : ''}`
+          : d.provenance?.likely_ai_assisted
+            ? 'AI-likely · velocity, no signatures'
+            : 'no AI signatures'}
       </p>
       <div className="space-y-2">
         {Object.entries(ANALYZER_LABELS).map(([key, label]) => {

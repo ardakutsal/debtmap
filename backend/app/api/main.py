@@ -344,6 +344,7 @@ def leaderboard(limit: int = 50):
             files = result.get("files_analyzed", 0)
             if files < 10:  # skip junk/tiny scans
                 continue
+            prov = result.get("provenance") or {}
             out.append(
                 {
                     "owner": r.owner,
@@ -351,6 +352,10 @@ def leaderboard(limit: int = 50):
                     "debt_score": r.debt_score,
                     "grade": r.grade,
                     "ai_generated_pct": r.ai_generated_pct,
+                    # Signed % alone under-reports repos that strip attribution;
+                    # surface the velocity signal so 0% can't read as "no AI".
+                    "likely_ai_assisted": prov.get("likely_ai_assisted"),
+                    "velocity_flag": (prov.get("velocity") or {}).get("flag"),
                     "files_analyzed": files,
                     "analysis_id": r.id,
                     "updated_at": r.updated_at.isoformat(),

@@ -10,10 +10,27 @@ type Entry = {
   debt_score: number;
   grade: string;
   ai_generated_pct: number | null;
+  likely_ai_assisted?: boolean | null;
+  velocity_flag?: string | null;
   files_analyzed: number;
   analysis_id: string;
   updated_at: string;
 };
+
+function aiCell(e: Entry) {
+  if (e.ai_generated_pct != null && e.ai_generated_pct > 0) return `${e.ai_generated_pct}%`;
+  if (e.likely_ai_assisted) return 'likely · velocity';
+  if (e.ai_generated_pct == null) return '—';
+  return 'no signatures';
+}
+
+function aiTitle(e: Entry) {
+  if (e.ai_generated_pct != null && e.ai_generated_pct > 0)
+    return 'Share of sampled commits carrying AI-agent signatures (Co-Authored-By trailers, bot identities)';
+  if (e.likely_ai_assisted)
+    return 'No AI signatures found, but commit velocity is consistent with heavy AI assistance (low confidence)';
+  return 'No AI-agent signatures found in sampled commits';
+}
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -48,7 +65,7 @@ export default function LeaderboardPage() {
                 <th className="px-4 py-3">Repository</th>
                 <th className="px-4 py-3 text-right">Score</th>
                 <th className="px-4 py-3 text-right">Grade</th>
-                <th className="px-4 py-3 text-right">AI commits</th>
+                <th className="px-4 py-3 text-right">AI-signed</th>
                 <th className="px-4 py-3 text-right">Files</th>
               </tr>
             </thead>
@@ -72,8 +89,12 @@ export default function LeaderboardPage() {
                       {e.grade}
                     </span>
                   </td>
-                  <td className="mono px-4 py-3 text-right text-muted">
-                    {e.ai_generated_pct != null ? `${e.ai_generated_pct}%` : '—'}
+                  <td className="mono px-4 py-3 text-right text-muted" title={aiTitle(e)}>
+                    {e.likely_ai_assisted && !(e.ai_generated_pct ?? 0) ? (
+                      <span className="text-accent">{aiCell(e)}</span>
+                    ) : (
+                      aiCell(e)
+                    )}
                   </td>
                   <td className="mono px-4 py-3 text-right text-muted">{e.files_analyzed}</td>
                 </tr>

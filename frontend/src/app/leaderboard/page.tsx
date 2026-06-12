@@ -18,7 +18,10 @@ type Entry = {
 };
 
 function aiCell(e: Entry) {
-  if (e.ai_generated_pct != null && e.ai_generated_pct > 0) return `${e.ai_generated_pct}%`;
+  if (e.ai_generated_pct != null && e.ai_generated_pct > 0) {
+    // Very-high velocity means the signed share is a floor — say so inline.
+    return e.velocity_flag === 'very_high' ? `≥${e.ai_generated_pct}%` : `${e.ai_generated_pct}%`;
+  }
   if (e.likely_ai_assisted) return 'likely · velocity';
   if (e.ai_generated_pct == null) return '—';
   return 'no signatures';
@@ -50,6 +53,12 @@ export default function LeaderboardPage() {
         <h1 className="mt-2 text-3xl font-semibold">Leaderboard</h1>
         <p className="mt-1 text-sm text-muted">
           Latest scan per repository, best DebtScore first. Scan any public repo to put it here.
+        </p>
+        <p className="mt-2 text-xs leading-relaxed text-muted">
+          <span className="text-text">AI-signed</span> is provenance, not a quality score — it is the
+          share of commits that declare an AI co-author in git. Quality is the grade. A{' '}
+          <span className="mono">≥</span> marks a floor: commit velocity suggests more AI involvement
+          than is signed.
         </p>
       </header>
 

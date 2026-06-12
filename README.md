@@ -5,7 +5,7 @@
 
 > Technical-debt scanner for AI-generated and "vibe-coded" repositories.
 
-**Try it live: [frontend-production-b171.up.railway.app](https://frontend-production-b171.up.railway.app)** — paste a GitHub URL, get a report in ~30s. [Leaderboard](https://frontend-production-b171.up.railway.app/leaderboard) · [Compare two repos](https://frontend-production-b171.up.railway.app/compare) · [Example report](https://frontend-production-b171.up.railway.app/results/b986c4f382e044c38853aacb61bee754)
+**Try it live: [debtmap.up.railway.app](https://debtmap.up.railway.app)** — paste a GitHub URL, get a report in ~30s. [Leaderboard](https://debtmap.up.railway.app/leaderboard) · [Compare two repos](https://debtmap.up.railway.app/compare) · [Example report — DebtMap scanning itself](https://debtmap.up.railway.app/results/fd3761e2e2ea4ea0adf85a4d98d782c5)
 
 DebtMap takes a GitHub URL, runs eight analyzers against the code, and returns:
 

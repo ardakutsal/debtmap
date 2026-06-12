@@ -24,9 +24,9 @@ import time
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-API = os.environ.get("DEBTMAP_API_URL", "https://api-production-99db.up.railway.app").rstrip("/")
+API = os.environ.get("DEBTMAP_API_URL", "https://debtmap-api.up.railway.app").rstrip("/")
 FRONTEND = os.environ.get(
-    "DEBTMAP_FRONTEND_URL", "https://frontend-production-b171.up.railway.app"
+    "DEBTMAP_FRONTEND_URL", "https://debtmap.up.railway.app"
 ).rstrip("/")
 
 mcp = FastMCP("debtmap")

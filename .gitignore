@@ -12,3 +12,12 @@ coverage/
 .DS_Store
 .claude/
 tsconfig.tsbuildinfo
+
+# Claude Code / planning artifacts — never ship these to the public repo
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+.planning/
+*.local.md
+.env.*
+!.env.example

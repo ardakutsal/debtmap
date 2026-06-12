@@ -24,8 +24,11 @@ class Settings(BaseSettings):
     inflight_window_minutes: int = 30
     max_queue_depth: int = 25
 
-    # Deep Scan (Faz 2) — disabled until anthropic_api_key is set
+    # Deep Scan (Faz 2) — disabled until an LLM key is set. Direct Anthropic
+    # is preferred when both keys are present; OpenRouter routes to the same
+    # Claude models for ~5% fee.
     anthropic_api_key: str = ""
+    openrouter_api_key: str = ""
     deep_scan_file_model: str = "claude-haiku-4-5"
     deep_scan_synthesis_model: str = "claude-sonnet-4-6"
     deep_scan_top_files: int = 12

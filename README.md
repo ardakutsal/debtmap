@@ -136,8 +136,9 @@ Latest completed report for a repo; latest scan per distinct repo, best score fi
 
 ### `POST /results/{id}/deep-scan` · `GET /results/{id}/deep-scan`
 LLM architect review (Claude Haiku per-file + Sonnet synthesis). Only active when
-the instance sets `ANTHROPIC_API_KEY`; per-IP daily quota and a monthly USD cap
-are enforced (`DEEP_SCAN_*` settings).
+the instance sets `ANTHROPIC_API_KEY` **or** `OPENROUTER_API_KEY` (same Claude
+models via OpenRouter, ~5% fee; direct Anthropic preferred when both are set).
+Per-IP daily quota and a monthly USD cap are enforced (`DEEP_SCAN_*` settings).
 
 ## Integrations
 

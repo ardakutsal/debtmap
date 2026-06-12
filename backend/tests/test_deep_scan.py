@@ -195,6 +195,7 @@ def test_deep_scan_api_quota_and_flags(fresh_db, monkeypatch):
 def test_deep_scan_disabled_without_key(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'ds2.db'}")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     from app.config import get_settings
 
     get_settings.cache_clear()
@@ -215,3 +216,77 @@ def test_deep_scan_disabled_without_key(tmp_path, monkeypatch):
     get_settings.cache_clear()
     dbmod._engine = None
     dbmod._SessionLocal = None
+
+
+def test_enabled_via_openrouter_key(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'ds3.db'}")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-test")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    from app.services.deep_scan import deep_scan_enabled, llm_provider
+
+    assert llm_provider() == "openrouter"
+    assert deep_scan_enabled() is True
+    get_settings.cache_clear()
+
+
+def test_anthropic_preferred_over_openrouter(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-test")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    from app.services.deep_scan import llm_provider
+
+    assert llm_provider() == "anthropic"
+    get_settings.cache_clear()
+
+
+def test_openrouter_structured_parses_and_costs(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-test")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    import app.services.deep_scan as ds_mod
+    from app.services.deep_scan import FileReview, _cost
+
+    fake_payload = {
+        "choices": [
+            {
+                "message": {
+                    "content": '```json\n{"path": "a.py", "verdict": "ok", "static_signal_correct": true, "findings": []}\n```'
+                }
+            }
+        ],
+        "usage": {"prompt_tokens": 1500, "completion_tokens": 100},
+    }
+
+    class _FakeHTTPResp:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return fake_payload
+
+    import httpx
+
+    captured = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured["model"] = json["model"]
+        captured["response_format"] = json["response_format"]["type"]
+        return _FakeHTTPResp()
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    parsed, inp, out = ds_mod._openrouter_structured(
+        "claude-haiku-4-5", "system", "user", FileReview, 1000
+    )
+    assert captured["model"] == "anthropic/claude-haiku-4.5"
+    assert captured["response_format"] == "json_schema"
+    assert parsed is not None and parsed.path == "a.py"
+    assert (inp, out) == (1500, 100)
+    # openrouter cost carries the platform fee
+    assert _cost("claude-haiku-4-5", 1500, 100, "openrouter") > _cost("claude-haiku-4-5", 1500, 100)
+    get_settings.cache_clear()

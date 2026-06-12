@@ -60,8 +60,19 @@ class ArchitectMemo(BaseModel):
     quick_wins: list[str]
 
 
+def llm_provider() -> str | None:
+    """Direct Anthropic preferred; OpenRouter as alternative (same Claude
+    models behind an OpenAI-schema API, ~5% fee)."""
+    settings = get_settings()
+    if settings.anthropic_api_key:
+        return "anthropic"
+    if settings.openrouter_api_key:
+        return "openrouter"
+    return None
+
+
 def deep_scan_enabled() -> bool:
-    return bool(get_settings().anthropic_api_key)
+    return llm_provider() is not None
 
 
 def monthly_spend_usd(session) -> float:
@@ -82,9 +93,88 @@ def _client():
     return anthropic.Anthropic(api_key=get_settings().anthropic_api_key)
 
 
-def _cost(model: str, input_tokens: int, output_tokens: int) -> float:
+# OpenRouter slugs for the same models (note: dots, not dashes).
+OPENROUTER_MODEL_IDS = {
+    "claude-haiku-4-5": "anthropic/claude-haiku-4.5",
+    "claude-sonnet-4-6": "anthropic/claude-sonnet-4.6",
+}
+OPENROUTER_FEE = 1.055  # ~5.5% platform fee on top of provider pricing
+
+
+def _cost(model: str, input_tokens: int, output_tokens: int, provider: str = "anthropic") -> float:
     inp, out = MODEL_PRICES.get(model, (5.0, 25.0))
-    return input_tokens / 1e6 * inp + output_tokens / 1e6 * out
+    base = input_tokens / 1e6 * inp + output_tokens / 1e6 * out
+    return base * (OPENROUTER_FEE if provider == "openrouter" else 1.0)
+
+
+def _openrouter_structured(model: str, system_text: str, user_content: str, schema_model, max_tokens: int):
+    """Call OpenRouter (OpenAI schema) and validate into the pydantic model.
+
+    Returns (parsed_or_None, input_tokens, output_tokens).
+    """
+    import httpx
+
+    or_model = OPENROUTER_MODEL_IDS.get(model, f"anthropic/{model}")
+    schema = schema_model.model_json_schema()
+    body = {
+        "model": or_model,
+        "max_tokens": max_tokens,
+        "messages": [
+            {
+                "role": "system",
+                # cache_control passes through to Anthropic for prompt caching.
+                "content": [{"type": "text", "text": system_text, "cache_control": {"type": "ephemeral"}}],
+            },
+            {"role": "user", "content": user_content},
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": schema_model.__name__, "strict": True, "schema": schema},
+        },
+    }
+    resp = httpx.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {get_settings().openrouter_api_key}",
+            "HTTP-Referer": "https://github.com/ardakutsal/debtmap",
+            "X-Title": "DebtMap Deep Scan",
+        },
+        json=body,
+        timeout=120.0,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    usage = data.get("usage") or {}
+    inp = int(usage.get("prompt_tokens") or 0)
+    out = int(usage.get("completion_tokens") or 0)
+    content = ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+    text = content.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        text = text.split("\n", 1)[1] if "\n" in text else text
+        text = text.rsplit("```", 1)[0] if "```" in text else text
+    try:
+        parsed = schema_model.model_validate_json(text)
+    except Exception:
+        parsed = None
+    return parsed, inp, out
+
+
+def _call_structured(provider: str, client, model: str, system_text: str, user_content: str, schema_model, max_tokens: int):
+    """Provider-agnostic structured call. Returns (parsed, input_tokens, output_tokens)."""
+    if provider == "openrouter":
+        return _openrouter_structured(model, system_text, user_content, schema_model, max_tokens)
+    resp = client.messages.parse(
+        model=model,
+        max_tokens=max_tokens,
+        system=[{"type": "text", "text": system_text, "cache_control": {"type": "ephemeral"}}],
+        messages=[{"role": "user", "content": user_content}],
+        output_format=schema_model,
+    )
+    u = getattr(resp, "usage", None)
+    inp = int(getattr(u, "input_tokens", 0) or 0)
+    out = int(getattr(u, "output_tokens", 0) or 0)
+    return resp.parsed_output, inp, out
 
 
 _FILE_SYSTEM_PROMPT = """You are a principal engineer reviewing one file from a repository flagged by a static technical-debt scanner.
@@ -137,6 +227,7 @@ def run_deep_scan(self, deep_scan_id: str) -> None:
     try:
         reviews, memo, usage = _execute(repo_url, branch, result, settings)
         total_cost = usage.pop("cost_usd")
+        provider = usage.pop("provider", "anthropic")
 
         def _done(r: DeepScan) -> None:
             r.status = "completed"
@@ -147,6 +238,7 @@ def run_deep_scan(self, deep_scan_id: str) -> None:
                     "models": {
                         "per_file": settings.deep_scan_file_model,
                         "synthesis": settings.deep_scan_synthesis_model,
+                        "provider": provider,
                     },
                 }
             )
@@ -169,7 +261,10 @@ def run_deep_scan(self, deep_scan_id: str) -> None:
 def _execute(repo_url: str, branch: str, result: dict, settings) -> tuple[list[FileReview], ArchitectMemo, dict]:
     from app.analysis.repo_loader import clone_repo, cleanup, temp_clone_dir
 
-    client = _client()
+    provider = llm_provider()
+    if provider is None:
+        raise RuntimeError("no LLM key configured")
+    client = _client() if provider == "anthropic" else None
     usage = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
 
     file_summary = result.get("file_summary") or []
@@ -200,16 +295,14 @@ def _execute(repo_url: str, branch: str, result: dict, settings) -> tuple[list[F
             f"Static analyzer per-category scores (0-100, higher = more debt): {json.dumps(entry.get('breakdown', {}))}\n\n"
             f"```\n{source}\n```"
         )
-        resp = client.messages.parse(
-            model=settings.deep_scan_file_model,
-            max_tokens=2000,
-            system=[{"type": "text", "text": _FILE_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": prompt}],
-            output_format=FileReview,
+        parsed, inp, out = _call_structured(
+            provider, client, settings.deep_scan_file_model, _FILE_SYSTEM_PROMPT, prompt, FileReview, 2000
         )
-        _track(usage, resp, settings.deep_scan_file_model)
-        if resp.parsed_output is not None:
-            reviews.append(resp.parsed_output)
+        usage["input_tokens"] += inp
+        usage["output_tokens"] += out
+        usage["cost_usd"] += _cost(settings.deep_scan_file_model, inp, out, provider)
+        if parsed is not None:
+            reviews.append(parsed)
 
     memo_input = {
         "repo": f"{result.get('owner')}/{result.get('repo')}",
@@ -221,26 +314,19 @@ def _execute(repo_url: str, branch: str, result: dict, settings) -> tuple[list[F
         },
         "file_reviews": [fr.model_dump() for fr in reviews],
     }
-    memo_resp = client.messages.parse(
-        model=settings.deep_scan_synthesis_model,
-        max_tokens=3000,
-        system=_MEMO_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": json.dumps(memo_input, ensure_ascii=False)}],
-        output_format=ArchitectMemo,
+    memo, inp, out = _call_structured(
+        provider,
+        client,
+        settings.deep_scan_synthesis_model,
+        _MEMO_SYSTEM_PROMPT,
+        json.dumps(memo_input, ensure_ascii=False),
+        ArchitectMemo,
+        3000,
     )
-    _track(usage, memo_resp, settings.deep_scan_synthesis_model)
-    memo = memo_resp.parsed_output
-    if memo is None:
-        raise RuntimeError("synthesis returned no parsable memo")
-    return reviews, memo, usage
-
-
-def _track(usage: dict, resp, model: str) -> None:
-    u = getattr(resp, "usage", None)
-    if u is None:
-        return
-    inp = int(getattr(u, "input_tokens", 0) or 0)
-    out = int(getattr(u, "output_tokens", 0) or 0)
     usage["input_tokens"] += inp
     usage["output_tokens"] += out
-    usage["cost_usd"] += _cost(model, inp, out)
+    usage["cost_usd"] += _cost(settings.deep_scan_synthesis_model, inp, out, provider)
+    if memo is None:
+        raise RuntimeError("synthesis returned no parsable memo")
+    usage["provider"] = provider
+    return reviews, memo, usage

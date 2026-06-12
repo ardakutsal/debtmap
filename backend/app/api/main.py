@@ -219,7 +219,15 @@ def start_deep_scan(analysis_id: str, request: Request):
             .first()
         )
         if existing is not None:
-            return {"deep_scan_id": existing.id, "status": existing.status}
+            # A queued/running scan older than 15 min is presumed lost (e.g.
+            # task message dropped during a deploy) — fall through to start a
+            # fresh one instead of pinning the analysis to a dead row.
+            stale = (
+                existing.status in ("queued", "running")
+                and existing.created_at < datetime.utcnow() - _td(minutes=15)
+            )
+            if not stale:
+                return {"deep_scan_id": existing.id, "status": existing.status}
 
         ip = _client_ip(request)
         day_ago = datetime.utcnow() - _td(hours=24)

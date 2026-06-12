@@ -10,7 +10,7 @@ celery_app = Celery(
     "debtmap",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.services.tasks"],
+    include=["app.services.tasks", "app.services.deep_scan"],
 )
 
 celery_app.conf.update(

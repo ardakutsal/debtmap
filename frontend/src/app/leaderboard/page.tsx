@@ -25,8 +25,12 @@ function aiCell(e: Entry) {
 }
 
 function aiTitle(e: Entry) {
-  if (e.ai_generated_pct != null && e.ai_generated_pct > 0)
-    return 'Share of sampled commits carrying AI-agent signatures (Co-Authored-By trailers, bot identities)';
+  if (e.ai_generated_pct != null && e.ai_generated_pct > 0) {
+    const base = 'Share of sampled commits carrying AI-agent signatures (Co-Authored-By trailers, bot identities)';
+    return e.velocity_flag === 'very_high'
+      ? base + '. Commit velocity is very high — the signed share is a floor, not a total.'
+      : base;
+  }
   if (e.likely_ai_assisted)
     return 'No AI signatures found, but commit velocity is consistent with heavy AI assistance (low confidence)';
   return 'No AI-agent signatures found in sampled commits';

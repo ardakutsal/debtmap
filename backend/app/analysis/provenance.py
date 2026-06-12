@@ -126,6 +126,14 @@ def analyze_provenance(repo_dir: str) -> dict | None:
         confidence = "high"
         top = ", ".join(name for name, _ in agents_sorted[:3])
         assessment = f"{ai_pct}% of sampled commits carry AI-agent signatures ({top})."
+        if velocity_flag == "very_high":
+            # A tiny signed share with extreme velocity usually means most
+            # contributors strip attribution — say so instead of implying 98% human.
+            assessment += (
+                f" Commit velocity is very high ({peak_24h} commits in one day) — "
+                "the signed share is a floor, not an estimate of total AI involvement."
+            )
+            likely_ai = True
     elif velocity_flag == "very_high" and window_days <= 14 and n >= 20:
         confidence = "low"
         likely_ai = True

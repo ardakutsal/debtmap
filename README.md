@@ -160,7 +160,7 @@ Per-IP daily quota and a monthly USD cap are enforced (`DEEP_SCAN_*` settings).
 
 - Analyzed code is **never executed** — only AST-parsed.
 - **Max 500 files / repo, max 500 KB / file.** Supported: `.py`, `.ts`, `.tsx`, `.js`, `.jsx`.
-- **Repo size cap:** repos GitHub reports above ~488 MB are rejected before cloning.
+- **Repo size cap:** repos GitHub reports above ~2 GB are rejected before cloning (the shallow clone we actually download is far smaller).
 - **Rate limit:** 10 analyses / IP / hour via slowapi, plus a global queue-depth cap;
   recent scans are served from cache instead of re-running.
 - **Deep Scan budget:** per-IP daily quota and a monthly USD cap, with measured

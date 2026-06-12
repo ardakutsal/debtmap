@@ -19,7 +19,10 @@ class Settings(BaseSettings):
     cors_origins_csv: str = "http://localhost:3000"
 
     # Abuse / cost controls (Faz 1)
-    max_repo_size_kb: int = 500_000  # GitHub-reported size; ~500 MB
+    # GitHub's `size` is the FULL server-side history; our depth-limited
+    # shallow clone downloads ~5-20% of it (openclaw: reported 1.5 GB,
+    # actual clone 285 MB). Cap generously; clone/task timeouts backstop.
+    max_repo_size_kb: int = 2_000_000
     reuse_window_hours: int = 6      # serve a recent completed scan instead of re-running
     inflight_window_minutes: int = 30
     max_queue_depth: int = 25

@@ -13,14 +13,15 @@ DebtMap takes a GitHub URL, runs eight analyzers against the code, and returns:
 - **AI provenance report** — % of sampled commits carrying AI-agent signatures (`Co-Authored-By` trailers, bot author identities, "Generated with" lines), plus a commit-velocity signal. Evidence from git metadata — never a code-style guess.
 - **File treemap** — box size = LOC, color = debt score
 - **Prioritized action plan** — category, effort estimate, affected files
-- **Embeddable SVG badge** — shields.io style, cached 1 hour
+- **Deep Scan (optional)** — an LLM architect review: Claude judges which static flags are real vs. framework noise, then writes a systemic-risk memo with quick wins. Bring your own `ANTHROPIC_API_KEY` or `OPENROUTER_API_KEY`.
+- **Embeddable SVG badge**, shareable score-card link previews, a public **leaderboard**, and a side-by-side **compare** view
 
 ## Quick start (Docker)
 
 ```bash
-git clone https://github.com/your-org/debtmap.git
+git clone https://github.com/ardakutsal/debtmap.git
 cd debtmap
-cp .env.example .env
+cp .env.example .env   # set FERNET_KEY (required); LLM key optional for Deep Scan
 docker compose up --build
 ```
 
@@ -69,12 +70,14 @@ python -m app.analysis.runner https://github.com/facebook/react --branch main
                                                              └────────────────┘
 ```
 
-| Service  | Role                                   |
-| -------- | -------------------------------------- |
-| api      | FastAPI, rate-limited, token-encrypted |
-| worker   | Celery worker, clones + analyzes repo  |
-| redis    | broker + results backend               |
-| frontend | Next.js 14, App Router, dark theme     |
+| Service  | Role                                                              |
+| -------- | ----------------------------------------------------------------- |
+| api      | FastAPI, rate-limited, token-encrypted                            |
+| worker   | Celery worker (+ embedded beat: token purge, weekly refresh)      |
+| redis    | broker + results backend                                          |
+| frontend | Next.js 14, App Router, dark theme, dynamic og-image score cards  |
+
+The hosted instance runs Postgres; the SQLite default is for local/dev.
 
 ## The eight analyzers
 
@@ -116,9 +119,12 @@ with explicit confidence, never silently folded into a percentage.
 
 ### `POST /analyze`
 ```json
-{ "repo_url": "https://github.com/owner/repo", "branch": "main", "github_token": "optional" }
+{ "repo_url": "https://github.com/owner/repo", "branch": "main", "github_token": "optional", "force": false }
 ```
 → `202 { "analysis_id": "...", "status": "queued", "status_url": "/results/..." }`
+
+A completed scan of the same repo+branch from the last 6 hours is reused
+(instant response) unless `force: true`; an in-flight scan is never duplicated.
 
 ### `GET /results/{id}`
 While running:
@@ -126,7 +132,8 @@ While running:
 { "status": "running", "progress_pct": 45, "current_step": "Running duplication" }
 ```
 When complete: full payload with `debt_score`, `grade`, `ai_generated_pct`,
-`analyzers` (per-category breakdown + per-file scores), `file_summary`, `action_plan`.
+`provenance` (agents, velocity, assessment), `analyzers` (per-category breakdown
++ per-file scores), `file_summary`, `action_plan`, `deep_scan_enabled`.
 
 ### `GET /badge/{owner}/{repo}`
 Returns an SVG badge, cached 1 hour, ETag-enabled.
@@ -153,14 +160,18 @@ Per-IP daily quota and a monthly USD cap are enforced (`DEEP_SCAN_*` settings).
 
 - Analyzed code is **never executed** — only AST-parsed.
 - **Max 500 files / repo, max 500 KB / file.** Supported: `.py`, `.ts`, `.tsx`, `.js`, `.jsx`.
-- **Rate limit:** 10 analyses / IP / hour via slowapi.
+- **Repo size cap:** repos GitHub reports above ~488 MB are rejected before cloning.
+- **Rate limit:** 10 analyses / IP / hour via slowapi, plus a global queue-depth cap;
+  recent scans are served from cache instead of re-running.
+- **Deep Scan budget:** per-IP daily quota and a monthly USD cap, with measured
+  token cost recorded per scan.
 - **Tokens:** Fernet-encrypted at rest; the encrypted payload is purged 1 hour after completion by the `debtmap.purge_tokens` task.
 - **GitHub rate limits:** Without a token, `code_churn` gracefully skips on 403 and the analyzer is simply dropped from the weighted score.
 
 ## Database migrations
 
-MVP uses SQLAlchemy `Base.metadata.create_all()` at startup — the schema is a
-single table (`analyses`) and is idempotent to create. If you add a column,
+MVP uses SQLAlchemy `Base.metadata.create_all()` at startup — the schema is two
+tables (`analyses`, `deep_scans`) and is idempotent to create. If you add a column,
 either drop the SQLite file or introduce Alembic (`pip install alembic && alembic init migrations`)
 at that point; adding it up-front is unnecessary complexity for a one-table MVP.
 

@@ -35,8 +35,12 @@ class Settings(BaseSettings):
     deep_scan_file_model: str = "claude-haiku-4-5"
     deep_scan_synthesis_model: str = "claude-sonnet-4-6"
     deep_scan_top_files: int = 12
-    deep_scan_daily_per_ip: int = 3
+    deep_scan_daily_per_ip: int = 5
+    # Soft daily budget so one viral day can't burn the month; monthly is the hard wall.
+    deep_scan_daily_budget_usd: float = 10.0
     deep_scan_monthly_cap_usd: float = 100.0
+    # Requests carrying X-Admin-Token matching this bypass Deep Scan quotas (owner use).
+    admin_token: str = ""
 
     @property
     def supported_extensions(self) -> list[str]:

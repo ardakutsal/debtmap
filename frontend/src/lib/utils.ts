@@ -27,3 +27,23 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 export function apiUrl(path: string) {
   return path.startsWith('http') ? path : `${API_BASE}${path}`;
 }
+
+// Owner bypass: visiting any page with ?admin=<token> stores the token once;
+// deep-scan requests then carry it so quotas don't apply to the instance owner.
+export function captureAdminToken() {
+  if (typeof window === 'undefined') return;
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('admin');
+  if (token) {
+    localStorage.setItem('debtmap_admin_token', token);
+    params.delete('admin');
+    const qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+  }
+}
+
+export function adminHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  const token = localStorage.getItem('debtmap_admin_token');
+  return token ? { 'X-Admin-Token': token } : {};
+}

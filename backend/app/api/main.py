@@ -164,7 +164,7 @@ def analyze(request: Request, body: AnalyzeRequest) -> AnalyzeResponse:
 
 
 @app.get("/results/{analysis_id}")
-def get_result(analysis_id: str):
+def get_result(analysis_id: str, request: Request):
     session = get_session()
     try:
         record = session.get(Analysis, analysis_id)
@@ -181,9 +181,23 @@ def get_result(analysis_id: str):
         payload = load_result(record.result_json) or {}
         payload["analysis_id"] = analysis_id
         payload["status"] = "completed"
+        from app.models.db import DeepScan
         from app.services.deep_scan import deep_scan_enabled
 
         payload["deep_scan_enabled"] = deep_scan_enabled()
+        if payload["deep_scan_enabled"]:
+            from datetime import timedelta as _td
+
+            day_ago = datetime.utcnow() - _td(hours=24)
+            used_today = (
+                session.query(DeepScan)
+                .filter(DeepScan.ip == _client_ip(request), DeepScan.created_at >= day_ago)
+                .count()
+            )
+            payload["deep_scan_quota"] = {
+                "used_today": used_today,
+                "daily_limit": get_settings().deep_scan_daily_per_ip,
+            }
         return payload
     finally:
         session.close()
@@ -201,10 +215,13 @@ def start_deep_scan(analysis_id: str, request: Request):
     from datetime import timedelta as _td
 
     from app.models.db import DeepScan
-    from app.services.deep_scan import deep_scan_enabled, monthly_spend_usd
+    from app.services.deep_scan import daily_spend_usd, deep_scan_enabled, monthly_spend_usd
 
     if not deep_scan_enabled():
         raise HTTPException(status_code=503, detail="Deep Scan is not enabled on this instance.")
+
+    cfg = get_settings()
+    is_admin = bool(cfg.admin_token) and request.headers.get("x-admin-token") == cfg.admin_token
 
     session = get_session()
     try:
@@ -230,16 +247,29 @@ def start_deep_scan(analysis_id: str, request: Request):
                 return {"deep_scan_id": existing.id, "status": existing.status}
 
         ip = _client_ip(request)
-        day_ago = datetime.utcnow() - _td(hours=24)
-        used_today = (
-            session.query(DeepScan).filter(DeepScan.ip == ip, DeepScan.created_at >= day_ago).count()
-        )
-        if used_today >= settings.deep_scan_daily_per_ip:
-            raise HTTPException(status_code=429, detail="Daily Deep Scan quota reached — try again tomorrow.")
-        if monthly_spend_usd(session) >= settings.deep_scan_monthly_cap_usd:
-            raise HTTPException(
-                status_code=503, detail="Deep Scan monthly budget exhausted on this instance."
+        if not is_admin:
+            day_ago = datetime.utcnow() - _td(hours=24)
+            used_today = (
+                session.query(DeepScan).filter(DeepScan.ip == ip, DeepScan.created_at >= day_ago).count()
             )
+            if used_today >= cfg.deep_scan_daily_per_ip:
+                raise HTTPException(
+                    status_code=429,
+                    detail=(
+                        f"Daily Deep Scan quota for your network reached "
+                        f"({used_today}/{cfg.deep_scan_daily_per_ip} in the last 24h — shared by everyone "
+                        "behind the same IP). It rolls over as earlier scans age out."
+                    ),
+                )
+            if daily_spend_usd(session) >= cfg.deep_scan_daily_budget_usd:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Today's shared Deep Scan budget on this instance is used up — try again tomorrow.",
+                )
+            if monthly_spend_usd(session) >= cfg.deep_scan_monthly_cap_usd:
+                raise HTTPException(
+                    status_code=503, detail="Deep Scan monthly budget exhausted on this instance."
+                )
 
         ds = DeepScan(id=uuid.uuid4().hex, analysis_id=analysis_id, ip=ip, status="queued")
         session.add(ds)

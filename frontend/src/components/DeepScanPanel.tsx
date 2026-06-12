@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiUrl } from '@/lib/utils';
+import { adminHeaders, apiUrl } from '@/lib/utils';
 
 type Risk = { title: string; severity: 'high' | 'medium' | 'low'; files: string[]; why: string; fix: string };
 type Memo = { headline: string; overall_assessment: string; risks: Risk[]; quick_wins: string[] };
@@ -22,10 +22,17 @@ const SEVERITY_COLOR: Record<string, string> = {
   low: '#8fa3ff',
 };
 
-export function DeepScanPanel({ analysisId }: { analysisId: string }) {
+type Quota = { used_today: number; daily_limit: number } | null | undefined;
+
+export function DeepScanPanel({ analysisId, quota }: { analysisId: string; quota?: Quota }) {
   const [state, setState] = useState<DeepScanState>({ status: 'none' });
   const [starting, setStarting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    setIsAdmin(Boolean(adminHeaders()['X-Admin-Token']));
+  }, []);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -66,7 +73,10 @@ export function DeepScanPanel({ analysisId }: { analysisId: string }) {
   async function start() {
     setStarting(true);
     try {
-      const resp = await fetch(apiUrl(`/results/${analysisId}/deep-scan`), { method: 'POST' });
+      const resp = await fetch(apiUrl(`/results/${analysisId}/deep-scan`), {
+        method: 'POST',
+        headers: adminHeaders(),
+      });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         setState({ status: 'error', detail: data.detail || `Error ${resp.status}` });
@@ -102,6 +112,13 @@ export function DeepScanPanel({ analysisId }: { analysisId: string }) {
           >
             {starting ? 'Starting…' : 'Run Deep Scan (~1 min)'}
           </button>
+          <p className="mono mt-2 text-[11px] text-muted">
+            {isAdmin
+              ? 'admin · unlimited'
+              : quota
+                ? `today: ${quota.used_today}/${quota.daily_limit} used on this network · rolls over hourly`
+                : 'free daily quota per network'}
+          </p>
         </div>
       )}
 

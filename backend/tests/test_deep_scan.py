@@ -290,3 +290,41 @@ def test_openrouter_structured_parses_and_costs(monkeypatch):
     # openrouter cost carries the platform fee
     assert _cost("claude-haiku-4-5", 1500, 100, "openrouter") > _cost("claude-haiku-4-5", 1500, 100)
     get_settings.cache_clear()
+
+
+def test_admin_token_bypasses_quota(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'ds4.db'}")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-test")
+    monkeypatch.setenv("ADMIN_TOKEN", "owner-secret")
+    monkeypatch.setenv("DEEP_SCAN_DAILY_PER_IP", "0")  # everyone else fully blocked
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    import app.models.db as dbmod
+
+    dbmod._engine = None
+    dbmod._SessionLocal = None
+
+    from fastapi.testclient import TestClient
+    import app.services.tasks  # noqa: F401
+    from app.api.main import app
+    from app.services import deep_scan as ds_mod
+
+    monkeypatch.setattr(ds_mod.run_deep_scan, "delay", lambda *_a, **_k: None)
+    client = TestClient(app)
+    aid = _seed_analysis()
+
+    blocked = client.post(f"/results/{aid}/deep-scan")
+    assert blocked.status_code == 429
+    assert "your network" in blocked.json()["detail"]
+
+    allowed = client.post(f"/results/{aid}/deep-scan", headers={"X-Admin-Token": "owner-secret"})
+    assert allowed.status_code == 202
+
+    # quota info present in results payload
+    quota = client.get(f"/results/{aid}").json().get("deep_scan_quota")
+    assert quota and quota["daily_limit"] == 0
+
+    get_settings.cache_clear()
+    dbmod._engine = None
+    dbmod._SessionLocal = None

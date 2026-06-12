@@ -1,9 +1,10 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import useSWR from 'swr';
-import { API_BASE, apiUrl } from '@/lib/utils';
+import { API_BASE, apiUrl, captureAdminToken } from '@/lib/utils';
 import { ScoreGauge } from '@/components/ScoreGauge';
 import { CategoryPie } from '@/components/CategoryPie';
 import { FileTreemap } from '@/components/FileTreemap';
@@ -28,6 +29,7 @@ const fetcher = async (url: string) => {
 export default function ResultsPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
+  useEffect(() => captureAdminToken(), []);
   const { data, error } = useSWR(id ? apiUrl(`/results/${id}`) : null, fetcher, {
     refreshInterval: (d) => (d?.status === 'completed' || d?.status === 'failed' ? 0 : 2000),
     shouldRetryOnError: (err) => !String(err?.message || '').includes('not found'),
@@ -77,7 +79,9 @@ export default function ResultsPage() {
             <FileTable rows={data.file_summary || []} />
           </Panel>
 
-          {data.deep_scan_enabled && id && <DeepScanPanel analysisId={id} />}
+          {data.deep_scan_enabled && id && (
+            <DeepScanPanel analysisId={id} quota={data.deep_scan_quota} />
+          )}
 
           <div>
             <h2 className="mb-3 text-lg font-semibold">Action plan</h2>

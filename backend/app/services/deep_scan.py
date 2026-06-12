@@ -87,6 +87,18 @@ def monthly_spend_usd(session) -> float:
     return float(total or 0.0)
 
 
+def daily_spend_usd(session) -> float:
+    from sqlalchemy import func
+
+    day_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    total = (
+        session.query(func.coalesce(func.sum(DeepScan.cost_usd), 0.0))
+        .filter(DeepScan.created_at >= day_start)
+        .scalar()
+    )
+    return float(total or 0.0)
+
+
 def _client():
     import anthropic
 

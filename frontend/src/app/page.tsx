@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiUrl } from '@/lib/utils';
+import { apiUrl, captureAdminToken } from '@/lib/utils';
 
 export default function LandingPage() {
   const router = useRouter();
+  useEffect(() => captureAdminToken(), []);
   const [url, setUrl] = useState('');
   const [token, setToken] = useState('');
   const [showToken, setShowToken] = useState(false);

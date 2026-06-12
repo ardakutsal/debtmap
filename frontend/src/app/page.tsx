@@ -56,7 +56,7 @@ export default function LandingPage() {
             <span className="text-accent">debt</span>map
           </div>
           <span className="rounded-full border border-border bg-panel px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted">
-            v0.1 · MIT
+            v0.2 · MIT
           </span>
         </div>
         <nav className="flex items-center gap-6 text-sm text-muted">

@@ -18,7 +18,7 @@ from app.services.tokens import encrypt
 settings = get_settings()
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="DebtMap API", version="0.1.0")
+app = FastAPI(title="DebtMap API", version="0.2.0")
 app.state.limiter = limiter
 app.add_middleware(
     CORSMiddleware,

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "debtmap"
-version = "0.1.0"
+version = "0.2.0"
 description = "Technical debt scanner for AI-generated codebases"
 authors = ["DebtMap Contributors"]
 license = "MIT"

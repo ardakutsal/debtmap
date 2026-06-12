@@ -25,6 +25,8 @@ export function FileTreemap({ files }: { files: FileSummary[] }) {
         >
           <Tooltip
             contentStyle={{ background: '#161a22', border: '1px solid #262c3a', borderRadius: 8 }}
+            labelStyle={{ color: '#e7ebf3' }}
+            itemStyle={{ color: '#9aa3b5' }}
             formatter={(_val: unknown, _name: unknown, item: any) => [
               `score ${item?.payload?.score?.toFixed?.(1) ?? '-'} · ${item?.payload?.size} LOC`,
               item?.payload?.name ?? '',
